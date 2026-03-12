@@ -1,0 +1,75 @@
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { assumptionsApi } from '../../services/api'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
+import ModuleConfigurator from './ModuleConfigurator'
+
+interface Props { projectId: string }
+
+const MODULES = [
+  { key: 'revenue', label: 'Revenue' },
+  { key: 'cogs', label: 'COGS / Gross Margin' },
+  { key: 'opex', label: 'Operating Expenses' },
+  { key: 'da', label: 'Depreciation & Amortization' },
+  { key: 'working_capital', label: 'Working Capital' },
+  { key: 'capex', label: 'Capital Expenditures' },
+  { key: 'debt', label: 'Debt & Financing' },
+  { key: 'tax', label: 'Tax' },
+  { key: 'dividends', label: 'Dividends' },
+  { key: 'interest_income', label: 'Interest Income' },
+  { key: 'non_operating', label: 'Non-Operating & Other Items' },
+]
+
+export default function AssumptionsPanel({ projectId }: Props) {
+  const { module: activeModule } = useParams<{ module?: string }>()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+
+  const currentModule = activeModule || MODULES[0].key
+  const currentModuleMeta = MODULES.find(m => m.key === currentModule)
+
+  const { data: moduleData, isLoading } = useQuery({
+    queryKey: ['assumptions', projectId, currentModule],
+    queryFn: () => assumptionsApi.getModule(projectId, currentModule).then(r => r.data),
+    enabled: !!currentModule,
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (data: any[]) => assumptionsApi.saveModule(projectId, currentModule, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['assumptions', projectId] })
+      qc.invalidateQueries({ queryKey: ['module-status', projectId] })
+      toast.success(`${currentModuleMeta?.label} assumptions saved`)
+    },
+    onError: () => toast.error('Failed to save assumptions'),
+  })
+
+  if (!activeModule) {
+    return (
+      <div className="card text-center py-12">
+        <p className="text-gray-500">Select a module from the sidebar to configure assumptions.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900">{currentModuleMeta?.label}</h2>
+        <p className="text-sm text-gray-500 mt-1">Configure how this line item will be projected.</p>
+      </div>
+
+      {isLoading ? (
+        <div className="card"><p className="text-gray-500">Loading...</p></div>
+      ) : (
+        <ModuleConfigurator
+          module={currentModule}
+          initialData={moduleData || []}
+          onSave={(data) => saveMutation.mutate(data)}
+          isSaving={saveMutation.isPending}
+        />
+      )}
+    </div>
+  )
+}
