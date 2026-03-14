@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates
+from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios
 from app.core.config import settings
 
 app = FastAPI(
@@ -35,6 +35,9 @@ app.include_router(projections.router, prefix=settings.API_V1_STR)
 
 # Valuation
 app.include_router(valuation.router, prefix=settings.API_V1_STR)
+
+# Ratios
+app.include_router(ratios.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")

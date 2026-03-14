@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
+import { useFormatNumber } from '../../utils/formatters'
+import FormatConfigurator from '../common/FormatConfigurator'
+import RatiosView from './RatiosView'
 
 interface Props { projectId: string; module: string; }
 
@@ -32,14 +35,7 @@ const SUBTOTALS = new Set([
     'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function fmt(val: string | undefined) {
-    if (val === undefined || val === null) return '—'
-    const n = parseFloat(val)
-    if (isNaN(n)) return '—'
-    return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
-function LiveFinancialTable({ items, data, years }: { items: string[]; data: Record<string, Record<string, string>>; years: number[] }) {
+function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: Record<string, Record<string, string>>; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
     return (
         <div className="overflow-auto border rounded-b-lg border-t-0 bg-white" style={{ maxHeight: '600px' }}>
             <table className="w-full text-xs">
@@ -77,7 +73,8 @@ function LiveFinancialTable({ items, data, years }: { items: string[]; data: Rec
 }
 
 export default function LiveProjectionsView({ projectId, module }: Props) {
-    const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF'>('PNL')
+    const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
+    const fmt = useFormatNumber()
 
     const { data: projections, isFetching } = useQuery({
         queryKey: ['projections', projectId],
@@ -94,19 +91,23 @@ export default function LiveProjectionsView({ projectId, module }: Props) {
         { key: 'PNL', label: 'P&L', items: PNL_ITEMS },
         { key: 'BS', label: 'Balance Sheet', items: BS_ITEMS },
         { key: 'CF', label: 'Cash Flow', items: CF_ITEMS },
+        { key: 'RATIOS', label: 'Ratios', items: [] },
     ] as const
 
     return (
         <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
-                <div>
-                    <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                        Live Model Preview
-                        {isFetching && <span className="flex h-2 w-2 relative">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                        </span>}
-                    </h2>
+                <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            Live Model Preview
+                            {isFetching && <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                            </span>}
+                        </h2>
+                        <FormatConfigurator />
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Updates instantly when you save assumptions</p>
                 </div>
             </div>
@@ -133,14 +134,22 @@ export default function LiveProjectionsView({ projectId, module }: Props) {
                     </div>
 
                     <div className="flex-1 overflow-hidden relative">
-                        {TABS.filter(t => t.key === activeTab).map(tab => (
-                            <LiveFinancialTable
-                                key={tab.key}
-                                items={tab.items}
-                                data={projections[tab.key] || {}}
-                                years={years}
-                            />
-                        ))}
+                        {activeTab === 'RATIOS' ? (
+                            <div className="p-4 h-full overflow-y-auto">
+                                <RatiosView projectId={projectId} />
+                            </div>
+                        ) : (
+                            TABS.filter(t => t.key === activeTab).map(tab => (
+                                <FinancialTable
+                                    key={tab.key}
+                                    title={tab.label}
+                                    items={tab.items as string[]}
+                                    data={(projections as any)[tab.key] || {}}
+                                    years={years}
+                                    fmt={fmt}
+                                />
+                            ))
+                        )}
                     </div>
                 </div>
             )}

@@ -80,17 +80,22 @@ export const templatesApi = {
 
 // Projections
 export const projectionsApi = {
-  run: (projectId: string) => api.post(`/projects/${projectId}/run`),
   get: (projectId: string) => api.get(`/projects/${projectId}/projections`),
+  run: (projectId: string) => api.post(`/projects/${projectId}/projections/run`),
   export: (projectId: string) =>
     api.get(`/projects/${projectId}/projections/export`, { responseType: 'blob' }),
 }
 
 // Valuation
 export const valuationApi = {
-  run: (projectId: string, data: any) => api.post(`/projects/${projectId}/valuation`, data),
   get: (projectId: string) => api.get(`/projects/${projectId}/valuation`),
+  run: (projectId: string, data: any) => api.post(`/projects/${projectId}/valuation`, data),
   getSensitivity: (projectId: string) => api.get(`/projects/${projectId}/valuation/sensitivity`),
+}
+
+// Ratios
+export const ratiosApi = {
+  get: (projectId: string) => api.get(`/projects/${projectId}/ratios`),
 }
 
 export default api

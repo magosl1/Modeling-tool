@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
+import { useFormatNumber } from '../../utils/formatters'
+import RatiosView from './RatiosView'
 import toast from 'react-hot-toast'
 
 interface Props { projectId: string; allModulesComplete: boolean }
@@ -32,14 +34,8 @@ const SUBTOTALS = new Set([
   'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function fmt(val: string | undefined) {
-  if (val === undefined || val === null) return '—'
-  const n = parseFloat(val)
-  if (isNaN(n)) return '—'
-  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
 function FinancialTable({ title, items, data, years }: { title: string; items: string[]; data: Record<string, Record<string, string>>; years: number[] }) {
+  const fmt = useFormatNumber()
   return (
     <div className="mb-8">
       <h3 className="font-semibold text-gray-800 mb-3">{title}</h3>
@@ -78,7 +74,7 @@ function FinancialTable({ title, items, data, years }: { title: string; items: s
 }
 
 export default function ProjectionsView({ projectId, allModulesComplete }: Props) {
-  const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF'>('PNL')
+  const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
 
   const { data: projections, refetch } = useQuery({
     queryKey: ['projections', projectId],
@@ -123,6 +119,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
     { key: 'PNL', label: 'P&L', items: PNL_ITEMS },
     { key: 'BS', label: 'Balance Sheet', items: BS_ITEMS },
     { key: 'CF', label: 'Cash Flow', items: CF_ITEMS },
+    { key: 'RATIOS', label: 'Ratios', items: [] },
   ] as const
 
   return (
@@ -176,15 +173,19 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
           </div>
 
           <div className="card">
-            {TABS.filter(t => t.key === activeTab).map(tab => (
-              <FinancialTable
-                key={tab.key}
-                title={tab.label}
-                items={tab.items}
-                data={projections[tab.key] || {}}
-                years={years}
-              />
-            ))}
+            {activeTab === 'RATIOS' ? (
+              <RatiosView projectId={projectId} />
+            ) : (
+              TABS.filter(t => t.key === activeTab).map(tab => (
+                <FinancialTable
+                  key={tab.key}
+                  title={tab.label}
+                  items={tab.items as string[]}
+                  data={(projections as any)[tab.key] || {}}
+                  years={years}
+                />
+              ))
+            )}
           </div>
         </>
       )}

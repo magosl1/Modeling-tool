@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { valuationApi } from '../../services/api'
+import { useFormatNumber } from '../../utils/formatters'
 import toast from 'react-hot-toast'
 
 interface Props { projectId: string }
@@ -15,14 +16,8 @@ interface ValuationForm {
   tv_method: 'gordon_growth' | 'exit_multiple'
 }
 
-function fmt(val: string | number | null | undefined) {
-  if (val === null || val === undefined) return '—'
-  const n = typeof val === 'string' ? parseFloat(val) : val
-  if (isNaN(n)) return '—'
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 export default function ValuationView({ projectId }: Props) {
+  const fmt = useFormatNumber()
   const { register, handleSubmit, watch } = useForm<ValuationForm>({
     defaultValues: {
       wacc: 10,

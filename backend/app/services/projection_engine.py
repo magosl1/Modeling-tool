@@ -519,7 +519,8 @@ class ProjectionEngine:
         ii = self._proj_pnl("Interest Income", year)
         ie = self._proj_pnl("Interest Expense", year)
         other = self._proj_pnl("Other Non-Operating Income / (Expense)", year)
-        self.pnl[year]["EBT"] = ebit + ii - ie + other
+        # Assuming ii, ie, other already have correct signs from historical or assumptions
+        self.pnl[year]["EBT"] = ebit + ii + ie + other
 
     # ------------------------------------------------------------------
     # Step 11 + 12: NOL + Tax
@@ -541,7 +542,7 @@ class ProjectionEngine:
 
         # NOL carry-forward
         nol_used = ZERO
-        if enable_nol and ebt > 0 and self.nol_balance > 0:
+        if enable_nol and ebt > ZERO and self.nol_balance > ZERO:
             nol_used = min(self.nol_balance, ebt)
             ebt_after_nol = ebt - nol_used
         else:
@@ -550,14 +551,14 @@ class ProjectionEngine:
         if ebt < ZERO:
             if enable_nol:
                 self.nol_balance += abs(ebt)
-            tax = ZERO
+            tax_val = ZERO
         else:
-            tax = max(ZERO, ebt_after_nol * rate / 100)
+            tax_val = max(ZERO, ebt_after_nol * rate / 100)
             self.nol_balance -= nol_used
 
-        self.pnl[year]["Tax"] = tax
+        self.pnl[year]["Tax"] = -tax_val # Tax is an expense
         self.result.nol_balances[year] = {
-            "nol_opening": self.nol_balance + nol_used,
+            "nol_opening": self.nol_balance + (nol_used if ebt > ZERO else -abs(ebt) if enable_nol else ZERO),
             "nol_used": nol_used,
             "nol_closing": self.nol_balance,
         }
@@ -569,7 +570,7 @@ class ProjectionEngine:
         self.pnl.setdefault(year, {})
         ebt = self._proj_pnl("EBT", year)
         tax = self._proj_pnl("Tax", year)
-        self.pnl[year]["Net Income"] = ebt - tax
+        self.pnl[year]["Net Income"] = ebt + tax # Tax is already negative
 
     # ------------------------------------------------------------------
     # Step 14: Dividends
@@ -604,8 +605,9 @@ class ProjectionEngine:
         self.bs.setdefault(year, {})
         prev_year = self._prev_year(year)
         re_prev = self._get_bs("Retained Earnings", prev_year) if prev_year else ZERO
-        net_income = self._proj_pnl("Net Income", year)
-        self.bs[year]["Retained Earnings"] = re_prev + net_income - dividends
+        ni = self._proj_pnl("Net Income", year)
+        # Dividends are already calculated and passed in
+        self.bs[year]["Retained Earnings"] = re_prev + ni - dividends
 
     # ------------------------------------------------------------------
     # Step 16: Equity changes
@@ -719,8 +721,9 @@ class ProjectionEngine:
         d_ap = delta("Accounts Payable")
         d_accrued = delta("Accrued Liabilities")
         d_ocl = delta("Other Current Liabilities")
+        d_olt = delta("Other Long-Term Liabilities")
 
-        changes_wc = -d_inventories - d_ar - d_prepaid + d_ap + d_accrued + d_ocl
+        changes_wc = -d_inventories - d_ar - d_prepaid + d_ap + d_accrued + d_ocl + d_olt
 
         ocf = net_income + da + amort + changes_wc
         self.cf[year]["Net Income"] = net_income
@@ -732,9 +735,9 @@ class ProjectionEngine:
         # Investing
         capex = d(self.bs[year].get("_capex", ZERO))
         d_nonop = delta("Non-Operating Assets")
-        icf = -capex + d_nonop
+        icf = -capex - d_nonop  # Increase in asset uses cash
         self.cf[year]["Capex"] = -capex
-        self.cf[year]["Acquisitions / Disposals"] = d_nonop
+        self.cf[year]["Acquisitions / Disposals"] = -d_nonop
         self.cf[year]["Investing Cash Flow"] = icf
 
         # Financing
@@ -794,6 +797,10 @@ class ProjectionEngine:
         goodwill_prev = self._get_bs("Goodwill", prev_year) if prev_year else ZERO
         self.bs[year]["Goodwill"] = goodwill_prev
 
+        # Other Long-Term Liabilities — flat in MVP
+        olt_prev = self._get_bs("Other Long-Term Liabilities", prev_year) if prev_year else ZERO
+        self.bs[year]["Other Long-Term Liabilities"] = olt_prev
+
     # ------------------------------------------------------------------
     # Step 21: Balance Sheet validation
     # ------------------------------------------------------------------
@@ -810,12 +817,21 @@ class ProjectionEngine:
         cash = d(bs.get("Cash & Equivalents", ZERO))
         noa = d(bs.get("Non-Operating Assets", ZERO))
 
+        # Asset summation logic - use absolute values of all component items
+        # Ensure we use Net PP&E and Net Intangibles directly
+        net_ppe = d(bs.get("Net PP&E", ZERO))
+        net_intang = d(bs.get("Net Intangibles", ZERO))
+        goodwill = d(bs.get("Goodwill", ZERO))
+        inventories = d(bs.get("Inventories", ZERO))
+        ar = d(bs.get("Accounts Receivable", ZERO))
+        prepaid = d(bs.get("Prepaid Expenses & Other Current Assets", ZERO))
+        cash = d(bs.get("Cash & Equivalents", ZERO))
+        noa = d(bs.get("Non-Operating Assets", ZERO))
+
         total_assets = (
-            (ppe_gross - acc_dep)
-            + (intangibles_gross - acc_amort)
-            + goodwill
-            + inventories + ar + prepaid
-            + cash + noa
+            abs(net_ppe) + abs(net_intang) + abs(goodwill) +
+            abs(inventories) + abs(ar) + abs(prepaid) +
+            abs(cash) + abs(noa)
         )
 
         ap = d(bs.get("Accounts Payable", ZERO))
@@ -824,12 +840,16 @@ class ProjectionEngine:
         other_lt = d(bs.get("Other Long-Term Liabilities", ZERO))
         st_debt = d(bs.get("Short-Term Debt", ZERO))
         lt_debt = d(bs.get("Long-Term Debt", ZERO))
-        total_liabilities = ap + accrued + ocl + other_lt + st_debt + lt_debt
+        # Internal engine convention works with absolute values for liabilities
+        total_liabilities = (
+            abs(ap) + abs(accrued) + abs(ocl) + abs(other_lt) + abs(st_debt) + abs(lt_debt)
+        )
 
         sc = d(bs.get("Share Capital", ZERO))
         re = d(bs.get("Retained Earnings", ZERO))
         oe = d(bs.get("Other Equity (AOCI, Treasury Stock, etc.)", ZERO))
-        total_equity = sc + re + oe
+        # Internal engine convention works with absolute values for equity
+        total_equity = abs(sc) + abs(re) + abs(oe)
 
         total_le = total_liabilities + total_equity
         residual = total_assets - total_le
@@ -889,14 +909,14 @@ class ProjectionEngine:
             # Step 17: Working Capital
             self._compute_working_capital(year, year_idx)
 
-            # Step 18: Cash Flow
+            # Step 18: Non-Op Assets, Goodwill, Other LT Liabilities
+            self._compute_nonop_assets(year)
+
+            # Step 19: Cash Flow
             net_change = self._compute_cash_flow(year)
 
-            # Step 19: Cash BS
+            # Step 20: Cash BS
             self._compute_cash_bs(year, net_change)
-
-            # Step 20: Non-Op Assets, Goodwill
-            self._compute_nonop_assets(year)
 
             # Step 21: Validate Balance Sheet
             self._validate_balance_sheet(year)

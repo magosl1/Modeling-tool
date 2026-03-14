@@ -19,6 +19,7 @@ interface AssumptionItem {
 interface Props {
   module: string
   initialData: AssumptionItem[]
+  projectionYears?: number[]
   onSave: (data: AssumptionItem[]) => void
   isSaving: boolean
 }
@@ -55,9 +56,9 @@ const MODULE_DEFAULTS: Record<string, AssumptionItem[]> = {
   ],
 }
 
-const METHOD_PARAMS: Record<string, Array<{ key: string; label: string; type?: string }>> = {
+const METHOD_PARAMS: Record<string, Array<{ key: string; label: string; type?: string; perYear?: boolean }>> = {
   growth_flat: [{ key: 'growth_rate', label: 'Annual Growth Rate (%)', type: 'number' }],
-  growth_variable: [{ key: 'growth_rate', label: 'Growth Rate (%) — same for all years', type: 'number' }],
+  growth_variable: [{ key: 'growth_rate', label: 'Growth Rate (%)', type: 'number', perYear: true }],
   pct_revenue: [{ key: 'pct', label: '% of Revenue', type: 'number' }],
   pct_cogs: [{ key: 'pct', label: '% of COGS', type: 'number' }],
   pct_gross_ppe: [{ key: 'pct', label: '% of Gross PP&E', type: 'number' }],
@@ -71,7 +72,7 @@ const METHOD_PARAMS: Record<string, Array<{ key: string; label: string; type?: s
   dso: [{ key: 'days', label: 'Days Sales Outstanding', type: 'number' }],
   dpo: [{ key: 'days', label: 'Days Payable Outstanding', type: 'number' }],
   single_rate: [{ key: 'rate', label: 'Effective Tax Rate (%)', type: 'number' }],
-  variable_rate: [{ key: 'rate', label: 'Tax Rate (%) — same for all years', type: 'number' }],
+  variable_rate: [{ key: 'rate', label: 'Tax Rate (%)', type: 'number', perYear: true }],
   payout_ratio: [{ key: 'payout_ratio', label: 'Payout Ratio (% of Net Income)', type: 'number' }],
   yield_on_cash: [{ key: 'yield_pct', label: 'Yield on Cash (%)', type: 'number' }],
   flat_repayment: [{ key: 'repayment', label: 'Annual Repayment', type: 'number' }],
@@ -120,7 +121,7 @@ const METHOD_LABELS: Record<string, string> = {
   headcount: 'Headcount × Avg. Cost',
 }
 
-export default function ModuleConfigurator({ module, initialData, onSave, isSaving }: Props) {
+export default function ModuleConfigurator({ module, initialData, projectionYears = [], onSave, isSaving }: Props) {
   const defaults = MODULE_DEFAULTS[module] || []
   const [items, setItems] = useState<AssumptionItem[]>(
     initialData.length > 0 ? initialData : defaults
@@ -149,6 +150,17 @@ export default function ModuleConfigurator({ module, initialData, onSave, isSavi
         return { ...item, params: item.params.map(p => p.param_key === paramKey && p.year === null ? { ...p, value } : p) }
       }
       return { ...item, params: [...item.params, { param_key: paramKey, year: null, value }] }
+    }))
+  }
+
+  const updatePerYearParam = (itemIdx: number, paramKey: string, year: number, value: string) => {
+    setItems(prev => prev.map((item, i) => {
+      if (i !== itemIdx) return item
+      const existingParam = item.params.find(p => p.param_key === paramKey && p.year === year)
+      if (existingParam) {
+        return { ...item, params: item.params.map(p => p.param_key === paramKey && p.year === year ? { ...p, value } : p) }
+      }
+      return { ...item, params: [...item.params, { param_key: paramKey, year, value }] }
     }))
   }
 
@@ -198,19 +210,44 @@ export default function ModuleConfigurator({ module, initialData, onSave, isSavi
                 {paramDefs.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
                     {paramDefs.map(pd => {
-                      const param = item.params.find(p => p.param_key === pd.key && p.year === null)
-                      return (
-                        <div key={pd.key}>
-                          <label className="label text-xs">{pd.label}</label>
-                          <input
-                            type={pd.type || 'text'}
-                            className="input text-sm"
-                            value={param?.value || ''}
-                            onChange={e => updateParam(idx, pd.key, e.target.value)}
-                            placeholder="Enter value"
-                          />
-                        </div>
-                      )
+                      if (pd.perYear && projectionYears.length > 0) {
+                        return (
+                          <div key={pd.key} className="col-span-2 space-y-2">
+                            <label className="label text-xs">{pd.label}</label>
+                            <div className="grid grid-cols-5 gap-2">
+                              {projectionYears.map(year => {
+                                const param = item.params.find(p => p.param_key === pd.key && p.year === year)
+                                return (
+                                  <div key={year}>
+                                    <label className="text-[10px] text-gray-500 mb-1 block">{year}</label>
+                                    <input
+                                      type={pd.type || 'text'}
+                                      className="input text-sm p-1.5"
+                                      value={param?.value || ''}
+                                      onChange={e => updatePerYearParam(idx, pd.key, year, e.target.value)}
+                                      placeholder="---"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      } else {
+                        const param = item.params.find(p => p.param_key === pd.key && p.year === null)
+                        return (
+                          <div key={pd.key}>
+                            <label className="label text-xs">{pd.label}</label>
+                            <input
+                              type={pd.type || 'text'}
+                              className="input text-sm"
+                              value={param?.value || ''}
+                              onChange={e => updateParam(idx, pd.key, e.target.value)}
+                              placeholder="Enter value"
+                            />
+                          </div>
+                        )
+                      }
                     })}
                   </div>
                 )}

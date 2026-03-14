@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assumptionsApi, projectionsApi } from '../../services/api'
+import { assumptionsApi, projectionsApi, projectsApi } from '../../services/api'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import ModuleConfigurator from './ModuleConfigurator'
@@ -28,6 +28,20 @@ export default function AssumptionsPanel({ projectId }: Props) {
 
   const currentModule = activeModule || MODULES[0].key
   const currentModuleMeta = MODULES.find(m => m.key === currentModule)
+
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectsApi.get(projectId).then(r => r.data),
+  })
+
+  // Calculate projection years array
+  const projectionYears: number[] = []
+  if (project?.fiscal_year_end && project?.projection_years) {
+    const lastHistYear = parseInt(project.fiscal_year_end.substring(0, 4))
+    for (let i = 1; i <= project.projection_years; i++) {
+      projectionYears.push(lastHistYear + i)
+    }
+  }
 
   const { data: moduleData, isLoading } = useQuery({
     queryKey: ['assumptions', projectId, currentModule],
@@ -74,8 +88,10 @@ export default function AssumptionsPanel({ projectId }: Props) {
         <div className="card"><p className="text-gray-500">Loading...</p></div>
       ) : (
         <ModuleConfigurator
+          key={currentModule}
           module={currentModule}
           initialData={moduleData || []}
+          projectionYears={projectionYears}
           onSave={(data) => saveMutation.mutate(data)}
           isSaving={isPending}
         />
@@ -83,3 +99,4 @@ export default function AssumptionsPanel({ projectId }: Props) {
     </div>
   )
 }
+

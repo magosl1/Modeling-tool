@@ -29,7 +29,10 @@ def _load_historical(project_id: str, db: Session) -> tuple:
     pnl, bs, cf = {}, {}, {}
     years = set()
     for r in records:
-        val = abs(Decimal(str(r.value)))  # Engine works with positive values internally
+        val = Decimal(str(r.value))
+        if r.statement_type == "BS" or r.statement_type == "CF":
+            val = abs(val) # Engine works with positive values for BS/CF items internally
+
         year = r.year
         years.add(year)
         if r.statement_type == "PNL":
@@ -225,13 +228,13 @@ def export_projections(
 
     ws_pnl = wb.active
     ws_pnl.title = "P&L"
-    write_export_sheet(ws_pnl, PNL_ITEMS, pnl, proj_pnl)
+    write_export_sheet(ws_pnl, [item for item, _ in PNL_ITEMS], pnl, proj_pnl)
 
     ws_bs = wb.create_sheet("Balance Sheet")
     write_export_sheet(ws_bs, [item for item, _, _ in BS_ITEMS], bs, proj_bs)
 
     ws_cf = wb.create_sheet("Cash Flow")
-    write_export_sheet(ws_cf, CF_ITEMS, cf, proj_cf)
+    write_export_sheet(ws_cf, [item for item, _ in CF_ITEMS], cf, proj_cf)
 
     buf = BytesIO()
     wb.save(buf)
