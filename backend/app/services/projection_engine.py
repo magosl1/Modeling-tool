@@ -124,13 +124,18 @@ class ProjectionEngine:
 
     def _param(self, assumption: Dict, key: str, year: int) -> Optional[Decimal]:
         params = assumption.get("params", [])
+        year_specific = None
+        global_val = None
         for p in params:
             if p.get("param_key") == key:
                 if p.get("year") == year:
-                    return d(p["value"])
-                if p.get("year") is None:
-                    return d(p["value"])
-        return None
+                    year_specific = d(p["value"])
+                elif p.get("year") is None:
+                    global_val = d(p["value"])
+        # Year-specific takes priority over global (year=None)
+        if year_specific is not None:
+            return year_specific
+        return global_val
 
     def _growth_val(self, assumption: Dict, base: Decimal, year: int, year_idx: int) -> Decimal:
         method = assumption.get("projection_method", "")
