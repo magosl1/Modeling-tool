@@ -84,7 +84,7 @@ class ProjectionAssumption(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
     module: Mapped[str] = mapped_column(
-        SAEnum("cogs", "opex", "da", "working_capital", "capex", "debt", "tax",
+        SAEnum("revenue", "cogs", "opex", "da", "working_capital", "capex", "debt", "tax",
                "dividends", "interest_income", "non_operating", name="module_enum"),
         nullable=False
     )

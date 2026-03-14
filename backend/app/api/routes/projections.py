@@ -9,19 +9,12 @@ from app.models.project import (
     Project, HistoricalData, ProjectionAssumption, AssumptionParam,
     ProjectedFinancial, NOLBalance
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_project_or_404
 from app.services.projection_engine import ProjectionEngine
 import uuid
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["projections"])
-
-
-def _get_project(project_id: str, user: User, db: Session) -> Project:
-    p = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not p:
-        raise HTTPException(404, "Project not found")
-    return p
 
 
 def _load_historical(project_id: str, db: Session) -> tuple:
@@ -83,7 +76,7 @@ def run_projection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
 
     if not hist_years:
@@ -151,7 +144,7 @@ def get_projections(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_project(project_id, current_user, db)
+    get_project_or_404(project_id, current_user, db)
     records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
 
     result = {"PNL": {}, "BS": {}, "CF": {}}
@@ -168,7 +161,7 @@ def export_projections(
     current_user: User = Depends(get_current_user),
 ):
     """Export projected financials to Excel."""
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
     proj_records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
 

@@ -556,8 +556,10 @@ class ProjectionEngine:
             self.nol_balance -= nol_used
 
         self.pnl[year]["Tax"] = tax
+        # nol_opening must reflect the balance BEFORE nol_used was subtracted
+        nol_opening = self.nol_balance + nol_used
         self.result.nol_balances[year] = {
-            "nol_opening": self.nol_balance + nol_used,
+            "nol_opening": nol_opening,
             "nol_used": nol_used,
             "nol_closing": self.nol_balance,
         }
