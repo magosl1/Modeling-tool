@@ -105,6 +105,7 @@ async def upload_historical_data(
         "Prepaid Expenses & Other Current Assets": "Working Capital",
         "Accounts Payable": "Working Capital", "Accrued Liabilities": "Working Capital",
         "Other Current Liabilities": "Working Capital",
+        "Other Long-Term Liabilities": "Other Long-Term",
         "Cash & Equivalents": "Cash",
         "Non-Operating Assets": "Non-Operating",
         "Short-Term Debt": "Debt", "Long-Term Debt": "Debt",

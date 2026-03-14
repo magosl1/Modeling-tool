@@ -68,11 +68,11 @@ def validate_historical_data(
         revenue = _get(pnl, "Revenue", year, Decimal(0))
         cogs = _get(pnl, "Cost of Goods Sold", year, Decimal(0))
         gross_profit = _get(pnl, "Gross Profit", year, Decimal(0))
-        expected_gp = revenue - cogs
+        expected_gp = revenue + cogs
         if abs(expected_gp - gross_profit) > TOLERANCE:
             errors.append(ValidationError(
                 "P&L", "Gross Profit", year,
-                f"Revenue ({revenue}) − COGS ({cogs}) = {expected_gp}, but Gross Profit = {gross_profit}. "
+                f"Revenue ({revenue}) + COGS ({cogs}) = {expected_gp}, but Gross Profit = {gross_profit}. "
                 f"Difference: {expected_gp - gross_profit}"
             ))
 
@@ -83,11 +83,11 @@ def validate_historical_data(
         amort = _get(pnl, "Amortization of Intangibles", year, Decimal(0))
         other_opex = _get(pnl, "Other OpEx", year, Decimal(0))
         ebit = _get(pnl, "EBIT", year, Decimal(0))
-        expected_ebit = gross_profit - sga - rd - da - amort - other_opex
+        expected_ebit = gross_profit + sga + rd + da + amort + other_opex
         if abs(expected_ebit - ebit) > TOLERANCE:
             errors.append(ValidationError(
                 "P&L", "EBIT", year,
-                f"Gross Profit − OpEx = {expected_ebit}, but EBIT = {ebit}. Difference: {expected_ebit - ebit}"
+                f"Gross Profit + OpEx = {expected_ebit}, but EBIT = {ebit}. Difference: {expected_ebit - ebit}"
             ))
 
         # --- Rule 5: EBT ---
@@ -95,7 +95,7 @@ def validate_historical_data(
         interest_expense = _get(pnl, "Interest Expense", year, Decimal(0))
         other_nonop = _get(pnl, "Other Non-Operating Income / (Expense)", year, Decimal(0))
         ebt = _get(pnl, "EBT", year, Decimal(0))
-        expected_ebt = ebit + interest_income - interest_expense + other_nonop
+        expected_ebt = ebit + interest_income + interest_expense + other_nonop
         if abs(expected_ebt - ebt) > TOLERANCE:
             errors.append(ValidationError(
                 "P&L", "EBT", year,
@@ -105,11 +105,11 @@ def validate_historical_data(
         # --- Rule 6: Net Income ---
         tax = _get(pnl, "Tax", year, Decimal(0))
         net_income = _get(pnl, "Net Income", year, Decimal(0))
-        expected_ni = ebt - tax
+        expected_ni = ebt + tax
         if abs(expected_ni - net_income) > TOLERANCE:
             errors.append(ValidationError(
                 "P&L", "Net Income", year,
-                f"EBT ({ebt}) − Tax ({tax}) = {expected_ni}, but Net Income = {net_income}. "
+                f"EBT ({ebt}) + Tax ({tax}) = {expected_ni}, but Net Income = {net_income}. "
                 f"Difference: {expected_ni - net_income}"
             ))
 
@@ -126,9 +126,12 @@ def validate_historical_data(
         cash = _get(bs, "Cash & Equivalents", year, Decimal(0))
         non_op_assets = _get(bs, "Non-Operating Assets", year, Decimal(0))
 
+        net_ppe = _get(bs, "Net PP&E", year, Decimal(0))
+        net_intangibles = _get(bs, "Net Intangibles", year, Decimal(0))
+
         total_assets = (
-            (ppe_gross - acc_dep)
-            + (intangibles_gross - acc_amort)
+            net_ppe
+            + net_intangibles
             + goodwill
             + inventories + ar + prepaid
             + cash
@@ -139,10 +142,11 @@ def validate_historical_data(
         ap = _get(bs, "Accounts Payable", year, Decimal(0))
         accrued = _get(bs, "Accrued Liabilities", year, Decimal(0))
         other_cl = _get(bs, "Other Current Liabilities", year, Decimal(0))
+        other_lt = _get(bs, "Other Long-Term Liabilities", year, Decimal(0))
         st_debt = _get(bs, "Short-Term Debt", year, Decimal(0))
         lt_debt = _get(bs, "Long-Term Debt", year, Decimal(0))
 
-        total_liabilities = ap + accrued + other_cl + st_debt + lt_debt
+        total_liabilities = ap + accrued + other_cl + other_lt + st_debt + lt_debt
 
         # Equity
         share_capital = _get(bs, "Share Capital", year, Decimal(0))
@@ -152,11 +156,11 @@ def validate_historical_data(
         total_equity = share_capital + retained_earnings + other_equity
         total_le = total_liabilities + total_equity
 
-        if abs(total_assets - total_le) > TOLERANCE:
+        if abs(total_assets + total_le) > TOLERANCE:
             errors.append(ValidationError(
                 "Balance Sheet", "Total Assets vs L+E", year,
-                f"Assets ({total_assets}) ≠ Liabilities + Equity ({total_le}). "
-                f"Difference: {total_assets - total_le}"
+                f"Assets ({total_assets}) + Liabilities & Equity ({total_le}) should equal 0. "
+                f"Sum: {total_assets + total_le}"
             ))
 
     # --- Rule 2: Cash reconciliation (multi-year) ---
@@ -186,15 +190,17 @@ def parse_historical_excel(file_bytes: bytes):
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
     result = {"PNL": {}, "BS": {}, "CF": {}}
 
-    def parse_sheet(ws, key, has_bucket=False):
+    def parse_sheet(ws, key):
         headers = [cell.value for cell in ws[1]]
-        year_start_col = 3 if has_bucket else 2  # 0-indexed after item cols
+        year_cols = []
         years = []
-        for col_idx in range(year_start_col, len(headers)):
-            h = headers[col_idx]
+        
+        for col_idx, h in enumerate(headers):
             if h is not None:
                 try:
-                    years.append(int(h))
+                    y = int(h)
+                    years.append(y)
+                    year_cols.append(col_idx)
                 except (ValueError, TypeError):
                     pass
 
@@ -205,7 +211,7 @@ def parse_historical_excel(file_bytes: bytes):
                 continue
             data[item] = {}
             for i, year in enumerate(years):
-                col_idx = year_start_col + i
+                col_idx = year_cols[i]
                 val = row[col_idx] if col_idx < len(row) else None
                 if val is not None:
                     try:
@@ -217,12 +223,12 @@ def parse_historical_excel(file_bytes: bytes):
 
     # P&L tab
     if "P&L" in wb.sheetnames:
-        years = parse_sheet(wb["P&L"], "PNL", has_bucket=False)
+        years = parse_sheet(wb["P&L"], "PNL")
     # Balance Sheet tab
     if "Balance Sheet" in wb.sheetnames:
-        parse_sheet(wb["Balance Sheet"], "BS", has_bucket=True)
+        parse_sheet(wb["Balance Sheet"], "BS")
     # Cash Flow tab
     if "Cash Flow" in wb.sheetnames:
-        parse_sheet(wb["Cash Flow"], "CF", has_bucket=False)
+        parse_sheet(wb["Cash Flow"], "CF")
 
     return result, years

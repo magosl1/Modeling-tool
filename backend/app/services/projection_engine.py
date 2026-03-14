@@ -821,9 +821,10 @@ class ProjectionEngine:
         ap = d(bs.get("Accounts Payable", ZERO))
         accrued = d(bs.get("Accrued Liabilities", ZERO))
         ocl = d(bs.get("Other Current Liabilities", ZERO))
+        other_lt = d(bs.get("Other Long-Term Liabilities", ZERO))
         st_debt = d(bs.get("Short-Term Debt", ZERO))
         lt_debt = d(bs.get("Long-Term Debt", ZERO))
-        total_liabilities = ap + accrued + ocl + st_debt + lt_debt
+        total_liabilities = ap + accrued + ocl + other_lt + st_debt + lt_debt
 
         sc = d(bs.get("Share Capital", ZERO))
         re = d(bs.get("Retained Earnings", ZERO))

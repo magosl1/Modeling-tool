@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assumptionsApi } from '../../services/api'
+import { assumptionsApi, projectionsApi } from '../../services/api'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import ModuleConfigurator from './ModuleConfigurator'
@@ -35,15 +35,25 @@ export default function AssumptionsPanel({ projectId }: Props) {
     enabled: !!currentModule,
   })
 
+  const runMutation = useMutation({
+    mutationFn: () => projectionsApi.run(projectId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projections', projectId] }),
+    onError: () => toast.error('Live projection update failed'),
+  })
+
   const saveMutation = useMutation({
     mutationFn: (data: any[]) => assumptionsApi.saveModule(projectId, currentModule, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['assumptions', projectId] })
       qc.invalidateQueries({ queryKey: ['module-status', projectId] })
       toast.success(`${currentModuleMeta?.label} assumptions saved`)
+      runMutation.mutate()
     },
     onError: () => toast.error('Failed to save assumptions'),
   })
+
+  // We consider it "saving" if either the save or the subsequent run is pending
+  const isPending = saveMutation.isPending || runMutation.isPending
 
   if (!activeModule) {
     return (
@@ -67,7 +77,7 @@ export default function AssumptionsPanel({ projectId }: Props) {
           module={currentModule}
           initialData={moduleData || []}
           onSave={(data) => saveMutation.mutate(data)}
-          isSaving={saveMutation.isPending}
+          isSaving={isPending}
         />
       )}
     </div>

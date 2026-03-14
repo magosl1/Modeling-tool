@@ -100,12 +100,15 @@ def save_module_assumptions(
         db.flush()
 
         for param in item.get("params", []):
+            param_value = param.get("value", "0")
+            if param_value == "" or param_value is None:
+                param_value = "0"
             db.add(AssumptionParam(
                 id=str(uuid.uuid4()),
                 assumption_id=assumption.id,
                 param_key=param["param_key"],
                 year=param.get("year"),
-                value=param["value"],
+                value=param_value,
             ))
 
     db.commit()

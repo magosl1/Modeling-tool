@@ -1,10 +1,11 @@
-import { Routes, Route, NavLink, useParams, useNavigate } from 'react-router-dom'
+import { Routes, Route, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectsApi, assumptionsApi } from '../../services/api'
 import UploadHistorical from '../project/UploadHistorical'
 import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
 import ValuationView from '../valuation/ValuationView'
+import LiveProjectionsView from '../projections/LiveProjectionsView'
 import clsx from 'clsx'
 
 const STATUS_ICON: Record<string, string> = {
@@ -31,6 +32,9 @@ const MODULES = [
 export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const isAssumptionsRoute = location.pathname.includes('/assumptions')
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', id],
@@ -85,35 +89,36 @@ export default function ProjectWorkspace() {
         </div>
       </header>
 
-      <div className="flex flex-1 max-w-7xl mx-auto w-full px-6 py-6 gap-6">
+      <div className={clsx(
+        'flex flex-1 mx-auto w-full px-6 py-6 gap-6',
+        isAssumptionsRoute ? 'max-w-[1600px]' : 'max-w-7xl'
+      )}>
         {/* Left sidebar: module status (only on assumptions route) */}
-        <Routes>
-          <Route path="assumptions/*" element={
-            <aside className="w-56 shrink-0">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Modules</h3>
-              <nav className="space-y-1">
-                {MODULES.map(m => (
-                  <NavLink
-                    key={m.key}
-                    to={`/projects/${id}/assumptions/${m.key}`}
-                    className={({ isActive }) => clsx(
-                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
-                      isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-600 hover:bg-gray-100'
-                    )}
-                  >
-                    <span>{STATUS_ICON[statusMap[m.key] || 'not_started']}</span>
-                    {m.label}
-                  </NavLink>
-                ))}
-              </nav>
-              {allComplete && (
-                <div className="mt-4 p-3 bg-green-50 rounded-lg text-xs text-green-700">
-                  All modules complete! You can run projections.
-                </div>
-              )}
-            </aside>
-          } />
-        </Routes>
+        {isAssumptionsRoute && (
+          <aside className="w-48 shrink-0">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Modules</h3>
+            <nav className="space-y-1">
+              {MODULES.map(m => (
+                <NavLink
+                  key={m.key}
+                  to={`/projects/${id}/assumptions/${m.key}`}
+                  className={({ isActive }) => clsx(
+                    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
+                    isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  <span>{STATUS_ICON[statusMap[m.key] || 'not_started']}</span>
+                  {m.label}
+                </NavLink>
+              ))}
+            </nav>
+            {allComplete && (
+              <div className="mt-4 p-3 bg-green-50 rounded-lg text-xs text-green-700">
+                All modules complete! You can run projections.
+              </div>
+            )}
+          </aside>
+        )}
 
         {/* Main content */}
         <main className="flex-1 min-w-0">
@@ -125,6 +130,13 @@ export default function ProjectWorkspace() {
             <Route path="valuation" element={<ValuationView projectId={id!} />} />
           </Routes>
         </main>
+
+        {/* Right sidebar: Live projections (only on assumptions route) */}
+        {isAssumptionsRoute && (
+          <div className="w-[450px] shrink-0 xl:w-[550px]">
+            <LiveProjectionsView projectId={id!} module="all" />
+          </div>
+        )}
       </div>
     </div>
   )
