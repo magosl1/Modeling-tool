@@ -6,7 +6,7 @@ from typing import List
 from app.db.base import get_db
 from app.models.user import User
 from app.models.project import Project, ProjectionAssumption
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_project_or_404
 from app.services.template_generator import generate_module_template
 import uuid
 from datetime import datetime, timezone
@@ -32,13 +32,6 @@ MODULE_LINE_ITEMS = {
 }
 
 
-def _get_project(project_id: str, user: User, db: Session) -> Project:
-    p = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not p:
-        raise HTTPException(404, "Project not found")
-    return p
-
-
 @router.get("/{project_id}/template/{module}")
 def download_module_template(
     project_id: str,
@@ -46,7 +39,7 @@ def download_module_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
 
     if module not in MODULE_LINE_ITEMS:
         raise HTTPException(400, f"Unknown module: {module}")

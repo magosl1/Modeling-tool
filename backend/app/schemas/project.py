@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 from datetime import date
 from decimal import Decimal
@@ -31,8 +31,7 @@ class ProjectOut(BaseModel):
     created_at: Any
     updated_at: Any
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class HistoricalDataPoint(BaseModel):
@@ -91,6 +90,20 @@ class ValuationInputCreate(BaseModel):
     discounting_convention: str = "end_of_year"
     shares_outstanding: Optional[Decimal] = None
 
+    @field_validator("wacc")
+    @classmethod
+    def wacc_range(cls, v: Decimal) -> Decimal:
+        if v <= 0 or v > 50:
+            raise ValueError("WACC must be between 0 and 50 (%)")
+        return v
+
+    @field_validator("terminal_growth_rate")
+    @classmethod
+    def growth_rate_range(cls, v: Decimal) -> Decimal:
+        if v < -5 or v > 20:
+            raise ValueError("Terminal growth rate must be between -5 and 20 (%)")
+        return v
+
 
 class ValuationOutputOut(BaseModel):
     enterprise_value: Decimal
@@ -104,8 +117,7 @@ class ValuationOutputOut(BaseModel):
     fcff_by_year: dict
     sensitivity_table: dict
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ProjectedFinancialOut(BaseModel):
@@ -114,5 +126,4 @@ class ProjectedFinancialOut(BaseModel):
     year: int
     value: Decimal
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

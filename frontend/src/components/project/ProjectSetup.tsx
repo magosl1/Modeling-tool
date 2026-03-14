@@ -15,7 +15,7 @@ interface FormData {
 }
 
 export default function ProjectSetup() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: { currency: 'USD', scale: 'thousands', projection_years: 5 },
   })
   const navigate = useNavigate()
@@ -62,7 +62,7 @@ export default function ProjectSetup() {
           </div>
 
           <div>
-            <label className="label">Projection Years: <span className="text-primary-600">{5}</span></label>
+            <label className="label">Projection Years: <span className="text-primary-600">{watch('projection_years')}</span></label>
             <input
               type="range" min={1} max={20} step={1}
               className="w-full"

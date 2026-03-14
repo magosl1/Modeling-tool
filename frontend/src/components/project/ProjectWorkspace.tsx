@@ -41,6 +41,7 @@ export default function ProjectWorkspace() {
     queryKey: ['module-status', id],
     queryFn: () => assumptionsApi.getModuleStatus(id!).then(r => r.data),
     refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   })
 
   const statusMap = Object.fromEntries(moduleStatuses.map((s: any) => [s.module, s.status]))
