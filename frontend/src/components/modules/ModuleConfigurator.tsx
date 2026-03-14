@@ -2,7 +2,7 @@
  * Tree-based module configurator.
  * Each line item: pick a method → sub-fields appear.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Param {
   param_key: string
@@ -125,6 +125,11 @@ export default function ModuleConfigurator({ module, initialData, onSave, isSavi
   const [items, setItems] = useState<AssumptionItem[]>(
     initialData.length > 0 ? initialData : defaults
   )
+
+  // Re-initialize when module or initialData changes
+  useEffect(() => {
+    setItems(initialData.length > 0 ? initialData : MODULE_DEFAULTS[module] || [])
+  }, [module, initialData])
 
   const methods = MODULE_METHODS[module] || ['growth_flat', 'fixed', 'flat']
 
