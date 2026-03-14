@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { projectsApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
+import type { Project } from '../../types/api'
 import toast from 'react-hot-toast'
 
 const STATUS_BADGE: Record<string, string> = {
@@ -62,7 +63,7 @@ export default function Dashboard() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((p: any) => (
+          {projects.map((p: Project) => (
             <div key={p.id} className="card hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
                 <Link to={`/projects/${p.id}`} className="text-lg font-semibold text-gray-900 hover:text-primary-600">

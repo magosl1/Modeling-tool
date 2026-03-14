@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ratiosApi } from '../../services/api'
+import type { RatiosResponse, YearValues } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 
 interface Props { projectId: string; allModulesComplete?: boolean }
@@ -7,7 +8,7 @@ interface Props { projectId: string; allModulesComplete?: boolean }
 export default function RatiosView({ projectId }: Props) {
   const fmt = useFormatNumber()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<RatiosResponse>({
     queryKey: ['ratios', projectId],
     queryFn: () => ratiosApi.get(projectId).then(r => r.data),
   })
@@ -36,17 +37,17 @@ export default function RatiosView({ projectId }: Props) {
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 pr-4 font-medium text-gray-600 w-64">Metric</th>
-                  {years.map((y: string | number) => (
+                  {years.map((y) => (
                     <th key={y} className="text-right py-2 px-3 font-medium text-blue-600 min-w-24">{y}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(metrics as any).map(([metricName, yearVals]) => (
+                {Object.entries(metrics).map(([metricName, yearVals]) => (
                   <tr key={metricName} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-2 pr-4 text-gray-700 font-medium">{metricName}</td>
-                    {years.map((y: string | number) => {
-                      const val = (yearVals as any)[y]
+                    {years.map((y) => {
+                      const val = (yearVals as YearValues)[y]
                       const num = val !== undefined ? Number(val) : NaN
                       return (
                         <td key={y} className="py-2 px-3 text-right text-gray-900 tabular-nums">

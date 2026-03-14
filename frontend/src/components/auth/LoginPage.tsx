@@ -14,8 +14,9 @@ export default function LoginPage() {
       const res = await authApi.login(data)
       setTokens(res.data.access_token, res.data.refresh_token)
       navigate('/')
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Login failed')
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
+      toast.error(axiosErr.response?.data?.detail || 'Login failed')
     }
   }
 

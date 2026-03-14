@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
+import type { ProjectionsResponse, StatementData } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 import RatiosView from './RatiosView'
 import toast from 'react-hot-toast'
@@ -34,7 +35,7 @@ const SUBTOTALS = new Set([
   'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function FinancialTable({ title, items, data, years, projectedYears }: { title: string; items: string[]; data: Record<string, Record<string, string>>; years: number[]; projectedYears: Set<number> }) {
+function FinancialTable({ title, items, data, years, projectedYears }: { title: string; items: string[]; data: StatementData; years: number[]; projectedYears: Set<number> }) {
   const fmt = useFormatNumber()
   return (
     <div className="mb-8">
@@ -77,7 +78,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
   const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
   const qc = useQueryClient()
 
-  const { data: projections, refetch } = useQuery({
+  const { data: projections, refetch } = useQuery<ProjectionsResponse>({
     queryKey: ['projections', projectId],
     queryFn: () => projectionsApi.get(projectId).then(r => r.data),
   })
@@ -92,10 +93,11 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
       refetch()
       qc.invalidateQueries({ queryKey: ['project', projectId] })
     },
-    onError: (err: any) => {
-      const detail = err.response?.data?.detail
-      if (detail?.error?.details) {
-        toast.error(detail.error.details.join('\n').slice(0, 200))
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: { error?: { details?: string[] } } } } }
+      const details = axiosErr.response?.data?.detail?.error?.details
+      if (details) {
+        toast.error(details.join('\n').slice(0, 200))
       } else {
         toast.error('Projection engine failed')
       }
@@ -118,7 +120,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
     ? [...new Set([
         ...(projections.historical_years || []).map(Number),
         ...(projections.projected_years || []).map(Number),
-        ...Object.values(projections.PNL as Record<string, Record<string, string>> || {}).flatMap(v => Object.keys(v)).map(Number),
+        ...Object.values(projections.PNL || {}).flatMap(v => Object.keys(v)).map(Number),
       ])].sort()
     : []
 
@@ -188,7 +190,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
                   key={tab.key}
                   title={tab.label}
                   items={tab.items as string[]}
-                  data={(projections as any)[tab.key] || {}}
+                  data={projections?.[tab.key] || {}}
                   years={years}
                   projectedYears={projectedYearsSet}
                 />

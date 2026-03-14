@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Dict, List
 from decimal import Decimal
 from app.db.base import get_db
@@ -38,15 +38,17 @@ def _load_historical(project_id: str, db: Session) -> tuple:
 
 
 def _load_assumptions(project_id: str, db: Session) -> Dict:
-    assumptions_db = db.query(ProjectionAssumption).filter(
-        ProjectionAssumption.project_id == project_id
-    ).all()
+    assumptions_db = (
+        db.query(ProjectionAssumption)
+        .options(joinedload(ProjectionAssumption.params))
+        .filter(ProjectionAssumption.project_id == project_id)
+        .all()
+    )
 
     # First, collect raw items per module
     raw: Dict[str, list] = {}
     for a in assumptions_db:
-        params_db = db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).all()
-        params = [{"param_key": p.param_key, "year": p.year, "value": Decimal(str(p.value))} for p in params_db]
+        params = [{"param_key": p.param_key, "year": p.year, "value": Decimal(str(p.value))} for p in a.params]
         raw.setdefault(a.module, []).append({
             "line_item": a.line_item,
             "projection_method": a.projection_method,

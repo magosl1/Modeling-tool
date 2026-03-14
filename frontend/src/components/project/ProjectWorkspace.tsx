@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectsApi, assumptionsApi } from '../../services/api'
+import type { ModuleStatus } from '../../types/api'
 import UploadHistorical from '../project/UploadHistorical'
 import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
@@ -48,7 +49,7 @@ export default function ProjectWorkspace() {
     refetchIntervalInBackground: false,
   })
 
-  const statusMap = Object.fromEntries(moduleStatuses.map((s: any) => [s.module, s.status]))
+  const statusMap = Object.fromEntries(moduleStatuses.map((s: ModuleStatus) => [s.module, s.status]))
   const allComplete = MODULES.every(m => statusMap[m.key] === 'complete')
 
   if (isLoading) return <div className="p-8 text-gray-500">Loading...</div>

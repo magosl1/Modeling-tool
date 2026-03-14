@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict
 from app.db.base import get_db
 from app.models.user import User
-from app.models.project import Project, ProjectionAssumption, AssumptionParam, HistoricalData
+from app.models.project import ProjectionAssumption, AssumptionParam, HistoricalData
 from app.api.deps import get_current_user, get_project_or_404
 import uuid
 from datetime import datetime, timezone
@@ -23,15 +23,19 @@ def get_all_assumptions(
     current_user: User = Depends(get_current_user),
 ):
     get_project_or_404(project_id, current_user, db)
-    assumptions = db.query(ProjectionAssumption).filter(ProjectionAssumption.project_id == project_id).all()
+    assumptions = (
+        db.query(ProjectionAssumption)
+        .options(joinedload(ProjectionAssumption.params))
+        .filter(ProjectionAssumption.project_id == project_id)
+        .all()
+    )
     result = {}
     for a in assumptions:
-        params = db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).all()
         result.setdefault(a.module, []).append({
             "id": a.id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
-            "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in params],
+            "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
         })
     return result
 
@@ -44,20 +48,24 @@ def get_module_assumptions(
     current_user: User = Depends(get_current_user),
 ):
     get_project_or_404(project_id, current_user, db)
-    assumptions = db.query(ProjectionAssumption).filter(
-        ProjectionAssumption.project_id == project_id,
-        ProjectionAssumption.module == module,
-    ).all()
-    result = []
-    for a in assumptions:
-        params = db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).all()
-        result.append({
+    assumptions = (
+        db.query(ProjectionAssumption)
+        .options(joinedload(ProjectionAssumption.params))
+        .filter(
+            ProjectionAssumption.project_id == project_id,
+            ProjectionAssumption.module == module,
+        )
+        .all()
+    )
+    return [
+        {
             "id": a.id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
-            "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in params],
-        })
-    return result
+            "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
+        }
+        for a in assumptions
+    ]
 
 
 @router.put("/{project_id}/assumptions/{module}")
@@ -79,8 +87,8 @@ def save_module_assumptions(
         ProjectionAssumption.module == module,
     ).all()
     for a in existing:
-        db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).delete()
-        db.delete(a)
+        db.delete(a)  # cascade deletes params via ORM relationship
+    db.flush()
 
     # Insert new
     for item in data:
@@ -118,28 +126,32 @@ def get_module_status(
 ):
     """Returns status per module: not_started | configured | complete | error."""
     get_project_or_404(project_id, current_user, db)
-    has_historical = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).first() is not None
+    has_historical = db.query(HistoricalData.id).filter(HistoricalData.project_id == project_id).first() is not None
+
+    # Single query with eager loading instead of N+1
+    assumptions = (
+        db.query(ProjectionAssumption)
+        .options(joinedload(ProjectionAssumption.params))
+        .filter(ProjectionAssumption.project_id == project_id)
+        .all()
+    )
+
+    # Group by module
+    by_module: Dict[str, list] = {}
+    for a in assumptions:
+        by_module.setdefault(a.module, []).append(a)
 
     statuses = []
     for module in MODULES:
-        assumptions = db.query(ProjectionAssumption).filter(
-            ProjectionAssumption.project_id == project_id,
-            ProjectionAssumption.module == module,
-        ).all()
-
-        if not assumptions:
+        module_assumptions = by_module.get(module, [])
+        if not module_assumptions:
             status = "not_started"
         else:
-            # Check if all assumptions have params
-            all_have_params = all(
-                db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).first() is not None
-                for a in assumptions
-            )
+            all_have_params = all(len(a.params) > 0 for a in module_assumptions)
             if all_have_params and has_historical:
                 status = "complete"
             else:
                 status = "configured"
-
         statuses.append({"module": module, "status": status})
 
     return statuses

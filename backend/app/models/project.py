@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import String, DateTime, Integer, Date, Enum as SAEnum, ForeignKey, Numeric, JSON, UniqueConstraint
+from sqlalchemy import String, DateTime, Integer, Date, Enum as SAEnum, ForeignKey, Numeric, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
@@ -10,7 +10,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     scale: Mapped[str] = mapped_column(
@@ -32,11 +32,20 @@ class Project(Base):
         onupdate=lambda: datetime.now(timezone.utc)
     )
 
+    # Relationships
+    historical_data: Mapped[list["HistoricalData"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    assumptions: Mapped[list["ProjectionAssumption"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    projected_financials: Mapped[list["ProjectedFinancial"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    nol_balances: Mapped[list["NOLBalance"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    valuation_input: Mapped["ValuationInput | None"] = relationship(back_populates="project", cascade="all, delete-orphan", uselist=False)
+    valuation_output: Mapped["ValuationOutput | None"] = relationship(back_populates="project", cascade="all, delete-orphan", uselist=False)
+
 
 class HistoricalData(Base):
     __tablename__ = "historical_data"
     __table_args__ = (
         UniqueConstraint("project_id", "statement_type", "line_item", "year"),
+        Index("ix_historical_data_project_id", "project_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -49,37 +58,14 @@ class HistoricalData(Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     value: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
 
-
-class RevenueStream(Base):
-    __tablename__ = "revenue_streams"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
-    stream_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    projection_method: Mapped[str] = mapped_column(
-        SAEnum("growth_flat", "growth_variable", "price_quantity", "fixed", "external_curve",
-               name="revenue_method_enum"),
-        nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-
-class RevenueStreamParam(Base):
-    __tablename__ = "revenue_stream_params"
-    __table_args__ = (
-        UniqueConstraint("stream_id", "param_key", "year"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    stream_id: Mapped[str] = mapped_column(String(36), ForeignKey("revenue_streams.id", ondelete="CASCADE"))
-    param_key: Mapped[str] = mapped_column(String(50), nullable=False)
-    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
+    project: Mapped["Project"] = relationship(back_populates="historical_data")
 
 
 class ProjectionAssumption(Base):
     __tablename__ = "projection_assumptions"
+    __table_args__ = (
+        Index("ix_projection_assumptions_project_id", "project_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
@@ -92,11 +78,15 @@ class ProjectionAssumption(Base):
     projection_method: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    project: Mapped["Project"] = relationship(back_populates="assumptions")
+    params: Mapped[list["AssumptionParam"]] = relationship(back_populates="assumption", cascade="all, delete-orphan")
+
 
 class AssumptionParam(Base):
     __tablename__ = "assumption_params"
     __table_args__ = (
         UniqueConstraint("assumption_id", "param_key", "year"),
+        Index("ix_assumption_params_assumption_id", "assumption_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -105,11 +95,14 @@ class AssumptionParam(Base):
     year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
+    assumption: Mapped["ProjectionAssumption"] = relationship(back_populates="params")
+
 
 class NOLBalance(Base):
     __tablename__ = "nol_balances"
     __table_args__ = (
         UniqueConstraint("project_id", "year"),
+        Index("ix_nol_balances_project_id", "project_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -119,11 +112,14 @@ class NOLBalance(Base):
     nol_used: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=0)
     nol_closing: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=0)
 
+    project: Mapped["Project"] = relationship(back_populates="nol_balances")
+
 
 class ProjectedFinancial(Base):
     __tablename__ = "projected_financials"
     __table_args__ = (
         UniqueConstraint("project_id", "statement_type", "line_item", "year"),
+        Index("ix_projected_financials_project_id", "project_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -134,6 +130,8 @@ class ProjectedFinancial(Base):
     line_item: Mapped[str] = mapped_column(String(100), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     value: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+
+    project: Mapped["Project"] = relationship(back_populates="projected_financials")
 
 
 class ValuationInput(Base):
@@ -150,6 +148,8 @@ class ValuationInput(Base):
         default="end_of_year"
     )
     shares_outstanding: Mapped[Decimal | None] = mapped_column(Numeric(20, 4), nullable=True)
+
+    project: Mapped["Project"] = relationship(back_populates="valuation_input")
 
 
 class ValuationOutput(Base):
@@ -168,20 +168,4 @@ class ValuationOutput(Base):
         SAEnum("gordon_growth", "exit_multiple", name="tv_method_enum"), nullable=False
     )
 
-
-class UploadedFile(Base):
-    __tablename__ = "uploaded_files"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
-    file_type: Mapped[str] = mapped_column(
-        SAEnum("historical", "module_template", "external_curve", name="file_type_enum"), nullable=False
-    )
-    module: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    s3_key: Mapped[str] = mapped_column(String(500), nullable=False)
-    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    upload_status: Mapped[str] = mapped_column(
-        SAEnum("pending", "validated", "rejected", name="upload_status_enum"), nullable=False, default="pending"
-    )
-    validation_errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    project: Mapped["Project"] = relationship(back_populates="valuation_output")

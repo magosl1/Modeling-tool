@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { valuationApi } from '../../services/api'
+import type { ValuationResult } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 import toast from 'react-hot-toast'
 
@@ -36,29 +37,32 @@ export default function ValuationView({ projectId }: Props) {
     retry: false,
   })
 
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<ValuationResult | null>(null)
 
   useEffect(() => {
     if (existing && !result) setResult(existing)
   }, [existing])
 
   const runMutation = useMutation({
-    mutationFn: (data: any) => valuationApi.run(projectId, data),
+    mutationFn: (data: ValuationForm) => valuationApi.run(projectId, {
+      wacc: data.wacc,
+      terminal_growth_rate: data.terminal_growth_rate,
+      exit_multiple: data.tv_method === 'exit_multiple' ? data.exit_multiple : null,
+      discounting_convention: data.discounting_convention,
+      shares_outstanding: data.shares_outstanding || null,
+    }),
     onSuccess: (res) => {
       setResult(res.data)
       toast.success('DCF valuation complete!')
     },
-    onError: (err: any) => toast.error(err.response?.data?.detail || 'Valuation failed'),
+    onError: (err: unknown) => {
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
+      toast.error(axiosErr.response?.data?.detail || 'Valuation failed')
+    },
   })
 
   const onSubmit = (data: ValuationForm) => {
-    runMutation.mutate({
-      wacc: data.wacc,
-      terminal_growth_rate: data.terminal_growth_rate,
-      exit_multiple: tvMethod === 'exit_multiple' ? data.exit_multiple : null,
-      discounting_convention: data.discounting_convention,
-      shares_outstanding: data.shares_outstanding || null,
-    })
+    runMutation.mutate(data)
   }
 
   return (
@@ -165,7 +169,7 @@ export default function ValuationView({ projectId }: Props) {
               </thead>
               <tbody>
                 <tr>
-                  {Object.values(result.fcff_by_year).map((v: any, i: number) => (
+                  {Object.values(result.fcff_by_year).map((v, i) => (
                     <td key={i} className="text-right py-2 px-4 tabular-nums">{fmt(v)}</td>
                   ))}
                 </tr>
@@ -185,16 +189,16 @@ export default function ValuationView({ projectId }: Props) {
               <thead>
                 <tr className="bg-gray-50">
                   <th className="py-2 px-3 text-left font-medium">WACC \ g</th>
-                  {Object.keys((Object.values(result.sensitivity_table)[0] as Record<string, unknown>) || {}).map(g => (
+                  {Object.keys(Object.values(result.sensitivity_table)[0] || {}).map(g => (
                     <th key={g} className="py-2 px-3 text-right font-medium text-blue-600">{g}%</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(result.sensitivity_table).map(([wacc, gVals]: [string, any]) => (
+                {Object.entries(result.sensitivity_table).map(([wacc, gVals]) => (
                   <tr key={wacc} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-2 px-3 font-medium text-gray-700">{wacc}%</td>
-                    {Object.values(gVals).map((v: any, i: number) => (
+                    {Object.values(gVals).map((v, i) => (
                       <td key={i} className="py-2 px-3 text-right tabular-nums">{fmt(v)}</td>
                     ))}
                   </tr>

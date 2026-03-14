@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
+import type { ProjectionsResponse, StatementData } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 import FormatConfigurator from '../common/FormatConfigurator'
 import RatiosView from './RatiosView'
@@ -35,7 +36,7 @@ const SUBTOTALS = new Set([
     'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: Record<string, Record<string, string>>; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
+function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: StatementData; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
     return (
         <div className="overflow-auto border rounded-b-lg border-t-0 bg-white" style={{ maxHeight: '600px' }}>
             <table className="w-full text-xs">
@@ -76,15 +77,14 @@ export default function LiveProjectionsView({ projectId, module }: Props) {
     const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
     const fmt = useFormatNumber()
 
-    const { data: projections, isFetching } = useQuery({
+    const { data: projections, isFetching } = useQuery<ProjectionsResponse>({
         queryKey: ['projections', projectId],
         queryFn: () => projectionsApi.get(projectId).then(r => r.data),
-        // Fast refetch logic to ensure it stays hot, or reliances on queryClient invalidation
     })
 
     const hasProjections = projections && Object.keys(projections.PNL || {}).length > 0
     const years = hasProjections
-        ? [...new Set(Object.values(projections.PNL as Record<string, Record<string, string>>).flatMap(v => Object.keys(v)).map(Number))].sort()
+        ? [...new Set(Object.values(projections.PNL).flatMap(v => Object.keys(v)).map(Number))].sort()
         : []
 
     const TABS = [
@@ -144,7 +144,7 @@ export default function LiveProjectionsView({ projectId, module }: Props) {
                                     key={tab.key}
                                     title={tab.label}
                                     items={tab.items as string[]}
-                                    data={(projections as any)[tab.key] || {}}
+                                    data={projections?.[tab.key] || {}}
                                     years={years}
                                     fmt={fmt}
                                 />

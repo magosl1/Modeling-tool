@@ -1,13 +1,33 @@
-from fastapi import FastAPI
+import logging
+import time
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios
+from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, metadata
 from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.access")
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Financial Modeling Platform — MVP",
     version="1.0.0",
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s %d %.1fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +58,9 @@ app.include_router(valuation.router, prefix=settings.API_V1_STR)
 
 # Ratios
 app.include_router(ratios.router, prefix=settings.API_V1_STR)
+
+# Metadata
+app.include_router(metadata.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")
