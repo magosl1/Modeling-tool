@@ -48,7 +48,10 @@ def update_project(project_id: str, data: ProjectUpdate, db: Session = Depends(g
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == current_user.id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    allowed_fields = {"name", "currency", "scale", "fiscal_year_end", "projection_years"}
     for field, value in data.model_dump(exclude_none=True).items():
+        if field not in allowed_fields:
+            continue
         setattr(project, field, value)
     project.updated_at = datetime.now(timezone.utc)
     db.commit()

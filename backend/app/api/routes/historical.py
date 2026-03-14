@@ -5,7 +5,7 @@ from typing import List
 from app.db.base import get_db
 from app.models.user import User
 from app.models.project import Project, HistoricalData, UploadedFile
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_project_or_404
 from app.services.template_generator import generate_historical_template
 from app.services.historical_validator import parse_historical_excel, validate_historical_data
 import uuid
@@ -13,12 +13,7 @@ from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["historical"])
 
-
-def _get_project(project_id: str, user: User, db: Session) -> Project:
-    p = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not p:
-        raise HTTPException(404, "Project not found")
-    return p
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.get("/{project_id}/template/historical")
@@ -27,7 +22,7 @@ def download_historical_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     if not project.fiscal_year_end or not project.projection_years:
         raise HTTPException(400, "Configure project (fiscal year end) before downloading template")
 
@@ -51,8 +46,11 @@ async def upload_historical_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     content = await file.read()
+
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
 
     # Parse
     try:
@@ -130,7 +128,7 @@ def get_historical_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_project(project_id, current_user, db)
+    get_project_or_404(project_id, current_user, db)
     records = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).all()
 
     result = {"PNL": {}, "BS": {}, "CF": {}}

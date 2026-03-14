@@ -23,7 +23,8 @@ api.interceptors.response.use(
           error.config.headers.Authorization = `Bearer ${data.access_token}`
           return api(error.config)
         } catch {
-          localStorage.clear()
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('refresh_token')
           window.location.href = '/login'
         }
       }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
 import { useFormatNumber } from '../../utils/formatters'
 import RatiosView from './RatiosView'
@@ -34,7 +34,7 @@ const SUBTOTALS = new Set([
   'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function FinancialTable({ title, items, data, years }: { title: string; items: string[]; data: Record<string, Record<string, string>>; years: number[] }) {
+function FinancialTable({ title, items, data, years, projectedYears }: { title: string; items: string[]; data: Record<string, Record<string, string>>; years: number[]; projectedYears: Set<number> }) {
   const fmt = useFormatNumber()
   return (
     <div className="mb-8">
@@ -45,7 +45,7 @@ function FinancialTable({ title, items, data, years }: { title: string; items: s
             <tr className="border-b border-gray-200">
               <th className="text-left py-2 pr-4 font-medium text-gray-600 w-64">Line Item</th>
               {years.map(y => (
-                <th key={y} className="text-right py-2 px-3 font-medium text-blue-600 min-w-24">{y}</th>
+                <th key={y} className={`text-right py-2 px-3 font-medium min-w-24 ${projectedYears.has(y) ? 'text-blue-600 bg-blue-50' : 'text-gray-600'}`}>{y}{projectedYears.has(y) ? 'P' : ''}</th>
               ))}
             </tr>
           </thead>
@@ -59,7 +59,7 @@ function FinancialTable({ title, items, data, years }: { title: string; items: s
                 >
                   <td className="py-1.5 pr-4 text-gray-700">{item}</td>
                   {years.map(y => (
-                    <td key={y} className="py-1.5 px-3 text-right text-gray-900 tabular-nums">
+                    <td key={y} className={`py-1.5 px-3 text-right tabular-nums ${projectedYears.has(y) ? 'text-blue-900 bg-blue-50/50' : 'text-gray-900'}`}>
                       {fmt(data[item]?.[y])}
                     </td>
                   ))}
@@ -75,6 +75,7 @@ function FinancialTable({ title, items, data, years }: { title: string; items: s
 
 export default function ProjectionsView({ projectId, allModulesComplete }: Props) {
   const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
+  const qc = useQueryClient()
 
   const { data: projections, refetch } = useQuery({
     queryKey: ['projections', projectId],
@@ -89,6 +90,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
         data.data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
       }
       refetch()
+      qc.invalidateQueries({ queryKey: ['project', projectId] })
     },
     onError: (err: any) => {
       const detail = err.response?.data?.detail
@@ -110,9 +112,14 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
     } catch { toast.error('Export failed') }
   }
 
-  const hasProjections = projections && Object.keys(projections.PNL || {}).length > 0
+  const hasProjections = projections && (projections.projected_years?.length > 0 || Object.keys(projections.PNL || {}).length > 0)
+  const projectedYearsSet = new Set<number>((projections?.projected_years || []).map(Number))
   const years = hasProjections
-    ? [...new Set(Object.values(projections.PNL as Record<string, Record<string, string>>).flatMap(v => Object.keys(v)).map(Number))].sort()
+    ? [...new Set([
+        ...(projections.historical_years || []).map(Number),
+        ...(projections.projected_years || []).map(Number),
+        ...Object.values(projections.PNL as Record<string, Record<string, string>> || {}).flatMap(v => Object.keys(v)).map(Number),
+      ])].sort()
     : []
 
   const TABS = [
@@ -183,6 +190,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
                   items={tab.items as string[]}
                   data={(projections as any)[tab.key] || {}}
                   years={years}
+                  projectedYears={projectedYearsSet}
                 />
               ))
             )}
@@ -192,7 +200,7 @@ export default function ProjectionsView({ projectId, allModulesComplete }: Props
 
       {!hasProjections && (
         <div className="card text-center py-16">
-          <p className="text-gray-500 mb-4">No projections yet. Configure all modules then run the engine.</p>
+          <p className="text-gray-500 mb-4">No data yet. Upload historical data and configure all modules, then run the engine.</p>
         </div>
       )}
     </div>

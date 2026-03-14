@@ -9,19 +9,12 @@ from app.models.project import (
     Project, HistoricalData, ProjectionAssumption, AssumptionParam,
     ProjectedFinancial, NOLBalance
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_project_or_404
 from app.services.projection_engine import ProjectionEngine
 import uuid
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["projections"])
-
-
-def _get_project(project_id: str, user: User, db: Session) -> Project:
-    p = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not p:
-        raise HTTPException(404, "Project not found")
-    return p
 
 
 def _load_historical(project_id: str, db: Session) -> tuple:
@@ -49,18 +42,164 @@ def _load_assumptions(project_id: str, db: Session) -> Dict:
         ProjectionAssumption.project_id == project_id
     ).all()
 
-    result = {}
+    # First, collect raw items per module
+    raw: Dict[str, list] = {}
     for a in assumptions_db:
         params_db = db.query(AssumptionParam).filter(AssumptionParam.assumption_id == a.id).all()
         params = [{"param_key": p.param_key, "year": p.year, "value": Decimal(str(p.value))} for p in params_db]
-
-        if a.module not in result:
-            result[a.module] = {"items": []}
-        result[a.module]["items"].append({
+        raw.setdefault(a.module, []).append({
             "line_item": a.line_item,
             "projection_method": a.projection_method,
             "params": params,
         })
+
+    # Transform into the format the ProjectionEngine expects per module
+    return _transform_assumptions(raw)
+
+
+def _transform_assumptions(raw: Dict[str, list]) -> Dict:
+    """Convert generic {module: [{line_item, projection_method, params}]} into
+    the module-specific dict shapes that ProjectionEngine expects."""
+    result: Dict = {}
+
+    # --- Revenue: engine expects {"streams": [{stream_name, projection_method, params}]} ---
+    if "revenue" in raw:
+        streams = []
+        for item in raw["revenue"]:
+            streams.append({
+                "stream_name": item["line_item"],
+                "projection_method": item["projection_method"],
+                "params": item["params"],
+            })
+        result["revenue"] = {"streams": streams}
+
+    # --- COGS: engine reads projection_method + params from top-level dict ---
+    if "cogs" in raw and raw["cogs"]:
+        item = raw["cogs"][0]  # Single COGS item
+        result["cogs"] = {
+            "projection_method": item["projection_method"],
+            "params": item["params"],
+        }
+
+    # --- OpEx: engine expects {"items": [...]} — already correct ---
+    if "opex" in raw:
+        result["opex"] = {"items": raw["opex"]}
+
+    # --- D&A: engine expects {"depreciation": {method, params}, "amortization": {method, params}} ---
+    if "da" in raw:
+        da_result: Dict = {}
+        for item in raw["da"]:
+            li = item["line_item"]
+            if "depreciation" in li.lower() or li == "D&A":
+                da_result["depreciation"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+            if "amortization" in li.lower():
+                da_result["amortization"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+        result["da"] = da_result
+
+    # --- Working Capital: engine expects {inventories: {method, params}, accounts_receivable: ...} ---
+    if "working_capital" in raw:
+        WC_KEY_MAP = {
+            "Inventories": "inventories",
+            "Accounts Receivable": "accounts_receivable",
+            "Prepaid Expenses & Other Current Assets": "prepaid",
+            "Accounts Payable": "accounts_payable",
+            "Accrued Liabilities": "accrued_liabilities",
+            "Other Current Liabilities": "other_current_liabilities",
+        }
+        wc_result: Dict = {}
+        for item in raw["working_capital"]:
+            key = WC_KEY_MAP.get(item["line_item"])
+            if key:
+                wc_result[key] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+        result["working_capital"] = wc_result
+
+    # --- Capex: engine reads projection_method + params from top-level dict ---
+    if "capex" in raw and raw["capex"]:
+        item = raw["capex"][0]
+        result["capex"] = {
+            "projection_method": item["projection_method"],
+            "params": item["params"],
+        }
+
+    # --- Debt: engine expects {interest_rate: {method, rate params}, repayment params, ...} ---
+    if "debt" in raw and raw["debt"]:
+        item = raw["debt"][0]
+        method = item["projection_method"]
+        # Build a flat dict with all params accessible + the method
+        debt_result: Dict = {
+            "projection_method": method,
+            "params": item["params"],
+            "interest_rate": {"method": "fixed", "params": []},
+        }
+        # Extract interest rate params if present
+        for p in item["params"]:
+            if p["param_key"] == "interest_rate":
+                debt_result["interest_rate"] = {
+                    "method": "fixed",
+                    "params": [{"param_key": "rate", "year": p["year"], "value": p["value"]}],
+                }
+        result["debt"] = debt_result
+
+    # --- Tax: engine reads projection_method + params from top-level dict ---
+    if "tax" in raw and raw["tax"]:
+        item = raw["tax"][0]
+        result["tax"] = {
+            "projection_method": item["projection_method"],
+            "params": item["params"],
+        }
+
+    # --- Dividends: engine reads projection_method + params from top-level dict ---
+    if "dividends" in raw and raw["dividends"]:
+        item = raw["dividends"][0]
+        result["dividends"] = {
+            "projection_method": item["projection_method"],
+            "params": item["params"],
+        }
+
+    # --- Interest Income: engine reads projection_method + params from top-level dict ---
+    if "interest_income" in raw and raw["interest_income"]:
+        item = raw["interest_income"][0]
+        result["interest_income"] = {
+            "projection_method": item["projection_method"],
+            "params": item["params"],
+        }
+
+    # --- Non-Operating: engine expects {non_operating_assets: {method}, other_nonop_pl: {method}, equity: {method}} ---
+    if "non_operating" in raw:
+        nonop_result: Dict = {}
+        for item in raw["non_operating"]:
+            li = item["line_item"]
+            if "non-operating assets" in li.lower() or "non_operating_assets" in li.lower():
+                nonop_result["non_operating_assets"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+            elif "goodwill" in li.lower():
+                nonop_result["goodwill"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+            elif "other non-operating" in li.lower() or "non-operating income" in li.lower():
+                nonop_result["other_nonop_pl"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+            elif "equity" in li.lower():
+                nonop_result["equity"] = {
+                    "method": item["projection_method"],
+                    "params": item["params"],
+                }
+        result["non_operating"] = nonop_result
+
     return result
 
 
@@ -86,7 +225,7 @@ def run_projection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
 
     if not hist_years:
@@ -154,12 +293,26 @@ def get_projections(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_project(project_id, current_user, db)
-    records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
+    get_project_or_404(project_id, current_user, db)
 
+    # Include historical data for context
+    hist_records = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).all()
     result = {"PNL": {}, "BS": {}, "CF": {}}
-    for r in records:
+    historical_years = set()
+    projected_years = set()
+
+    for r in hist_records:
         result[r.statement_type].setdefault(r.line_item, {})[r.year] = str(r.value)
+        historical_years.add(r.year)
+
+    # Overlay projected data (projected years take precedence)
+    proj_records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
+    for r in proj_records:
+        result[r.statement_type].setdefault(r.line_item, {})[r.year] = str(r.value)
+        projected_years.add(r.year)
+
+    result["historical_years"] = sorted(historical_years)
+    result["projected_years"] = sorted(projected_years)
 
     return result
 
@@ -171,7 +324,7 @@ def export_projections(
     current_user: User = Depends(get_current_user),
 ):
     """Export projected financials to Excel."""
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
     proj_records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
 

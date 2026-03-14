@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { valuationApi } from '../../services/api'
@@ -36,7 +36,11 @@ export default function ValuationView({ projectId }: Props) {
     retry: false,
   })
 
-  const [result, setResult] = useState<any>(existing || null)
+  const [result, setResult] = useState<any>(null)
+
+  useEffect(() => {
+    if (existing && !result) setResult(existing)
+  }, [existing])
 
   const runMutation = useMutation({
     mutationFn: (data: any) => valuationApi.run(projectId, data),
@@ -181,7 +185,7 @@ export default function ValuationView({ projectId }: Props) {
               <thead>
                 <tr className="bg-gray-50">
                   <th className="py-2 px-3 text-left font-medium">WACC \ g</th>
-                  {Object.keys(Object.values(result.sensitivity_table)[0] as any).map(g => (
+                  {Object.keys((Object.values(result.sensitivity_table)[0] as Record<string, unknown>) || {}).map(g => (
                     <th key={g} className="py-2 px-3 text-right font-medium text-blue-600">{g}%</th>
                   ))}
                 </tr>

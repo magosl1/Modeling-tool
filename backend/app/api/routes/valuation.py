@@ -4,20 +4,13 @@ from decimal import Decimal
 from app.db.base import get_db
 from app.models.user import User
 from app.models.project import Project, ProjectedFinancial, ValuationInput, ValuationOutput
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_project_or_404
 from app.services.dcf_engine import DCFEngine
 from app.schemas.project import ValuationInputCreate
 import uuid
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["valuation"])
-
-
-def _get_project(project_id: str, user: User, db: Session) -> Project:
-    p = db.query(Project).filter(Project.id == project_id, Project.user_id == user.id).first()
-    if not p:
-        raise HTTPException(404, "Project not found")
-    return p
 
 
 def _load_projections(project_id: str, db: Session):
@@ -45,7 +38,7 @@ def run_valuation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _get_project(project_id, current_user, db)
+    project = get_project_or_404(project_id, current_user, db)
     pnl, bs, cf, proj_years = _load_projections(project_id, db)
 
     # Save inputs
@@ -131,7 +124,7 @@ def get_valuation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_project(project_id, current_user, db)
+    get_project_or_404(project_id, current_user, db)
     vo = db.query(ValuationOutput).filter(ValuationOutput.project_id == project_id).first()
     if not vo:
         raise HTTPException(404, "No valuation found. Run valuation first.")
@@ -154,7 +147,7 @@ def get_sensitivity(
     current_user: User = Depends(get_current_user),
 ):
     """Re-compute sensitivity table from stored valuation inputs."""
-    _get_project(project_id, current_user, db)
+    get_project_or_404(project_id, current_user, db)
     vi = db.query(ValuationInput).filter(ValuationInput.project_id == project_id).first()
     if not vi:
         raise HTTPException(404, "No valuation inputs found.")
