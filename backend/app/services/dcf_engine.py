@@ -71,8 +71,10 @@ class DCFEngine:
         tax = self._get_pnl("Tax", year)
         ebt = self._get_pnl("EBT", year)
 
-        # Effective tax rate from projections
-        tax_rate = (tax / ebt) if ebt != ZERO else ZERO
+        # Effective tax rate from projections.
+        # Tax is stored as a negative value (expense) in the projection P&L,
+        # so we use abs(tax) to derive a positive rate in [0, 1].
+        tax_rate = (abs(tax) / ebt) if ebt > ZERO else ZERO
         tax_rate = max(ZERO, min(Decimal("1"), tax_rate))
 
         taxes_nopat = ebit * tax_rate

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import insert
 from sqlalchemy.orm import Session, joinedload
 from typing import Dict, List
 from decimal import Decimal
@@ -17,14 +18,31 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/projects", tags=["projections"])
 
 
+# PNL items that users enter as negative values per template convention "(-)".
+# The projection engine works with positive magnitudes for all items, so we
+# normalise these to abs() when loading from the DB (same treatment as BS/CF).
+_PNL_EXPENSE_ITEMS = frozenset({
+    "Cost of Goods Sold",
+    "SG&A",
+    "R&D",
+    "D&A",
+    "Amortization of Intangibles",
+    "Other OpEx",
+    "Interest Expense",
+    "Tax",
+})
+
+
 def _load_historical(project_id: str, db: Session) -> tuple:
     records = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).all()
     pnl, bs, cf = {}, {}, {}
     years = set()
     for r in records:
         val = Decimal(str(r.value))
-        if r.statement_type == "BS" or r.statement_type == "CF":
-            val = abs(val) # Engine works with positive values for BS/CF items internally
+        # Engine works with positive magnitudes internally.
+        # BS and CF are already abs()'d; PNL expense items follow the same rule.
+        if r.statement_type in ("BS", "CF") or r.line_item in _PNL_EXPENSE_ITEMS:
+            val = abs(val)
 
         year = r.year
         years.add(year)
@@ -248,35 +266,46 @@ def run_projection(
             },
         )
 
-    # Store projected financials
+    # Store projected financials — bulk insert is significantly faster than
+    # individual db.add() calls for potentially hundreds of rows.
     db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).delete()
     db.query(NOLBalance).filter(NOLBalance.project_id == project_id).delete()
 
-    def store_statement(data: dict, stmt_type: str):
+    def _rows_for_statement(data: dict, stmt_type: str) -> list:
+        rows = []
         for line_item, year_vals in data.items():
             for year, value in year_vals.items():
-                db.add(ProjectedFinancial(
-                    id=str(uuid.uuid4()),
-                    project_id=project_id,
-                    statement_type=stmt_type,
-                    line_item=line_item,
-                    year=year,
-                    value=value,
-                ))
+                rows.append({
+                    "id": str(uuid.uuid4()),
+                    "project_id": project_id,
+                    "statement_type": stmt_type,
+                    "line_item": line_item,
+                    "year": year,
+                    "value": value,
+                })
+        return rows
 
-    store_statement(result.pnl, "PNL")
-    store_statement(result.bs, "BS")
-    store_statement(result.cf, "CF")
+    all_financial_rows = (
+        _rows_for_statement(result.pnl, "PNL")
+        + _rows_for_statement(result.bs, "BS")
+        + _rows_for_statement(result.cf, "CF")
+    )
+    if all_financial_rows:
+        db.execute(insert(ProjectedFinancial), all_financial_rows)
 
-    for year, nol in result.nol_balances.items():
-        db.add(NOLBalance(
-            id=str(uuid.uuid4()),
-            project_id=project_id,
-            year=year,
-            nol_opening=nol["nol_opening"],
-            nol_used=nol["nol_used"],
-            nol_closing=nol["nol_closing"],
-        ))
+    nol_rows = [
+        {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "year": year,
+            "nol_opening": nol["nol_opening"],
+            "nol_used": nol["nol_used"],
+            "nol_closing": nol["nol_closing"],
+        }
+        for year, nol in result.nol_balances.items()
+    ]
+    if nol_rows:
+        db.execute(insert(NOLBalance), nol_rows)
 
     project.status = "projected"
     project.updated_at = datetime.now(timezone.utc)

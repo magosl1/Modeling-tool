@@ -68,6 +68,11 @@ class ProjectionEngine:
 
         self.last_hist_year = self.hist_years[-1] if self.hist_years else None
 
+        # Pre-compute prev-year map for O(1) lookup instead of O(n) list.index()
+        self._prev_year_map: Dict[int, Optional[int]] = {}
+        for i, y in enumerate(self.proj_years):
+            self._prev_year_map[y] = self.last_hist_year if i == 0 else self.proj_years[i - 1]
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -87,12 +92,7 @@ class ProjectionEngine:
         return d(self.bs.get(year, {}).get(item))
 
     def _prev_year(self, year: int) -> Optional[int]:
-        if year in self.proj_years:
-            idx = self.proj_years.index(year)
-            if idx == 0:
-                return self.last_hist_year
-            return self.proj_years[idx - 1]
-        return None
+        return self._prev_year_map.get(year)
 
     def _get_bs(self, item: str, year: int) -> Decimal:
         """Get BS value from projected or historical."""
@@ -116,20 +116,25 @@ class ProjectionEngine:
                 return item
         return module_data if not items else None
 
+    @staticmethod
+    def _build_param_index(assumption: Dict) -> Dict:
+        """Build a {(param_key, year): value} index for O(1) lookup."""
+        index: Dict = {}
+        for p in assumption.get("params", []):
+            index[(p["param_key"], p.get("year"))] = d(p["value"])
+        return index
+
     def _param(self, assumption: Dict, key: str, year: int) -> Optional[Decimal]:
-        params = assumption.get("params", [])
-        year_specific = None
-        global_val = None
-        for p in params:
-            if p.get("param_key") == key:
-                if p.get("year") == year:
-                    year_specific = d(p["value"])
-                elif p.get("year") is None:
-                    global_val = d(p["value"])
-        # Year-specific takes priority over global (year=None)
-        if year_specific is not None:
-            return year_specific
-        return global_val
+        # Lazily build and cache the param index on the assumption dict itself.
+        index = assumption.get("_param_index")
+        if index is None:
+            index = self._build_param_index(assumption)
+            assumption["_param_index"] = index
+        # Year-specific value takes priority over global (year=None).
+        year_val = index.get((key, year))
+        if year_val is not None:
+            return year_val
+        return index.get((key, None))
 
     def _growth_val(self, assumption: Dict, base: Decimal, year: int, year_idx: int) -> Decimal:
         method = assumption.get("projection_method", "")
@@ -523,8 +528,9 @@ class ProjectionEngine:
         ii = self._proj_pnl("Interest Income", year)
         ie = self._proj_pnl("Interest Expense", year)
         other = self._proj_pnl("Other Non-Operating Income / (Expense)", year)
-        # Assuming ii, ie, other already have correct signs from historical or assumptions
-        self.pnl[year]["EBT"] = ebit + ii + ie + other
+        # Interest Expense is stored as a positive amount and must be subtracted from EBIT.
+        # Interest Income and Other Non-Operating are positive and added.
+        self.pnl[year]["EBT"] = ebit + ii - ie + other
 
     # ------------------------------------------------------------------
     # Step 11 + 12: NOL + Tax
@@ -810,19 +816,7 @@ class ProjectionEngine:
     # ------------------------------------------------------------------
     def _validate_balance_sheet(self, year: int):
         bs = self.bs[year]
-        ppe_gross = d(bs.get("PP&E Gross", ZERO))
-        acc_dep = d(bs.get("Accumulated Depreciation", ZERO))
-        intangibles_gross = d(bs.get("Intangibles Gross", ZERO))
-        acc_amort = d(bs.get("Accumulated Amortization", ZERO))
-        goodwill = d(bs.get("Goodwill", ZERO))
-        inventories = d(bs.get("Inventories", ZERO))
-        ar = d(bs.get("Accounts Receivable", ZERO))
-        prepaid = d(bs.get("Prepaid Expenses & Other Current Assets", ZERO))
-        cash = d(bs.get("Cash & Equivalents", ZERO))
-        noa = d(bs.get("Non-Operating Assets", ZERO))
-
-        # Asset summation logic - use absolute values of all component items
-        # Ensure we use Net PP&E and Net Intangibles directly
+        # Use Net PP&E and Net Intangibles (gross minus accumulated already baked in).
         net_ppe = d(bs.get("Net PP&E", ZERO))
         net_intang = d(bs.get("Net Intangibles", ZERO))
         goodwill = d(bs.get("Goodwill", ZERO))
