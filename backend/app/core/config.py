@@ -17,12 +17,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # AWS S3
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_REGION: str = "us-east-1"
-    S3_BUCKET: str = "financial-modeler-uploads"
-
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"
 

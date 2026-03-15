@@ -3,14 +3,22 @@ import { useDropzone } from 'react-dropzone'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { historicalApi } from '../../services/api'
 import toast from 'react-hot-toast'
+import type { Project, HistoricalResponse } from '../../types/api'
 
-interface Props { projectId: string; project: any }
+interface ValidationError {
+  tab: string
+  line_item: string
+  year?: number
+  message: string
+}
+
+interface Props { projectId: string; project: Project }
 
 export default function UploadHistorical({ projectId, project }: Props) {
   const qc = useQueryClient()
-  const [validationErrors, setValidationErrors] = useState<any[]>([])
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
 
-  const { data: historical } = useQuery({
+  const { data: historical } = useQuery<HistoricalResponse>({
     queryKey: ['historical', projectId],
     queryFn: () => historicalApi.getData(projectId).then(r => r.data),
   })

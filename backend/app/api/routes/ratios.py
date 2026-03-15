@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.models.user import User
-from app.api.deps import get_current_user
-from app.api.routes.projections import _get_project, _load_historical
+from app.api.deps import get_current_user, get_project_or_404
+from app.api.routes.projections import _load_historical
 from app.models.project import ProjectedFinancial
 from decimal import Decimal
 
@@ -15,7 +15,7 @@ def get_ratios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_project(project_id, current_user, db)
+    get_project_or_404(project_id, current_user, db)
     
     pnl_hist, bs_hist, cf_hist, hist_years = _load_historical(project_id, db)
     proj_records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
+import ErrorBoundary from './components/common/ErrorBoundary'
 import LoginPage from './components/auth/LoginPage'
 import RegisterPage from './components/auth/RegisterPage'
 import Dashboard from './components/dashboard/Dashboard'
@@ -11,14 +12,21 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore()
+  return isAuthenticated ? <Navigate to="/" replace /> : <>{children}</>
+}
+
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-      <Route path="/projects/new" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
-      <Route path="/projects/:id/*" element={<PrivateRoute><ProjectWorkspace /></PrivateRoute>} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/projects/new" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
+        <Route path="/projects/:id/*" element={<PrivateRoute><ProjectWorkspace /></PrivateRoute>} />
+      </Routes>
+    </ErrorBoundary>
   )
 }

@@ -63,7 +63,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: celery -A app.tasks worker --loglevel=info
+    command: celery -A app.tasks:celery_app worker --loglevel=info
 
   frontend:
     build:

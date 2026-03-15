@@ -22,14 +22,6 @@ def get_current_user(
     return user
 
 
-def get_project_for_user(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.models.project import Project
-    project = db.query(Project).filter(Project.id == project_id, Project.user_id == current_user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
 def get_project_or_404(project_id: str, user: User, db: Session):
     """Reusable helper to fetch a project or raise 404. Call directly (not as a dependency)."""
     from app.models.project import Project

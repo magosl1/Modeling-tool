@@ -2,9 +2,9 @@
 from app.db.base import Base, engine
 from app.models.user import User
 from app.models.project import (
-    Project, HistoricalData, RevenueStream, RevenueStreamParam,
+    Project, HistoricalData,
     ProjectionAssumption, AssumptionParam, NOLBalance,
-    ProjectedFinancial, ValuationInput, ValuationOutput, UploadedFile,
+    ProjectedFinancial, ValuationInput, ValuationOutput,
 )
 
 

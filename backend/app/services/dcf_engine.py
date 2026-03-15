@@ -8,14 +8,7 @@ Sensitivity: 5×5 matrix WACC × Terminal Growth Rate
 from decimal import Decimal
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-
-ZERO = Decimal("0")
-
-
-def d(val) -> Decimal:
-    if val is None:
-        return ZERO
-    return Decimal(str(val))
+from app.services.utils import ZERO, d
 
 
 @dataclass

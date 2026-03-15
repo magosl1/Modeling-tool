@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.db.base import get_db
 from app.models.user import User
-from app.models.project import Project, HistoricalData, UploadedFile
+from app.models.project import Project, HistoricalData
 from app.api.deps import get_current_user, get_project_or_404
 from app.services.template_generator import generate_historical_template
 from app.services.historical_validator import parse_historical_excel, validate_historical_data

@@ -27,15 +27,9 @@ Runs in strict dependency order:
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from app.services.utils import ZERO, d
 
-ZERO = Decimal("0")
 TOLERANCE = Decimal("0.5")
-
-
-def d(val) -> Decimal:
-    if val is None:
-        return ZERO
-    return Decimal(str(val))
 
 
 @dataclass
