@@ -1,3 +1,67 @@
+// ── Entity ───────────────────────────────────────────────
+
+export type EntityType = 'company_listed' | 'company_private' | 'project' | 'division' | 'asset' | 'holdco'
+export type ConsolidationMethod = 'full' | 'proportional' | 'equity_method' | 'none'
+
+export interface Entity {
+  id: string
+  project_id: string
+  parent_entity_id: string | null
+  name: string
+  entity_type: EntityType
+  ticker: string | null
+  exchange: string | null
+  currency: string
+  country: string | null
+  sector: string | null
+  description: string | null
+  ownership_pct: number
+  consolidation_method: ConsolidationMethod
+  is_active: boolean
+  start_date: string | null
+  end_date: string | null
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface EntityCreate {
+  name: string
+  entity_type?: EntityType
+  currency?: string
+  country?: string | null
+  sector?: string | null
+  description?: string | null
+  ticker?: string | null
+  exchange?: string | null
+  ownership_pct?: number
+  consolidation_method?: ConsolidationMethod
+  parent_entity_id?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  display_order?: number
+}
+
+export interface EntityUpdate {
+  name?: string
+  entity_type?: EntityType
+  currency?: string
+  country?: string | null
+  sector?: string | null
+  description?: string | null
+  ticker?: string | null
+  exchange?: string | null
+  ownership_pct?: number
+  consolidation_method?: ConsolidationMethod
+  parent_entity_id?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  is_active?: boolean
+  display_order?: number
+}
+
+export type ProjectType = 'single_entity' | 'multi_entity' | 'project_finance'
+
 // ── Project ──────────────────────────────────────────────
 
 export interface Project {
@@ -8,6 +72,8 @@ export interface Project {
   fiscal_year_end: string | null
   projection_years: number
   status: 'draft' | 'configured' | 'projected' | 'valued'
+  project_type: ProjectType
+  base_currency: string
   created_at: string
   updated_at: string
 }
@@ -18,6 +84,8 @@ export interface ProjectCreate {
   scale?: string
   fiscal_year_end?: string | null
   projection_years?: number
+  project_type?: ProjectType
+  base_currency?: string
 }
 
 export interface ProjectUpdate {
@@ -26,6 +94,8 @@ export interface ProjectUpdate {
   scale?: string
   fiscal_year_end?: string | null
   projection_years?: number
+  project_type?: ProjectType
+  base_currency?: string
 }
 
 // ── Historical ───────────────────────────────────────────

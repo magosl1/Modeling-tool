@@ -25,6 +25,12 @@ class Project(Base):
         nullable=False,
         default="draft"
     )
+    # Phase 0: Universal platform fields
+    project_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="single_entity"
+        # Values: "single_entity" | "multi_entity" | "project_finance"
+    )
+    base_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -33,6 +39,10 @@ class Project(Base):
     )
 
     # Relationships
+    entities: Mapped[list["Entity"]] = relationship(  # type: ignore[name-defined]
+        "Entity", back_populates="project", cascade="all, delete-orphan",
+        order_by="Entity.display_order"
+    )
     historical_data: Mapped[list["HistoricalData"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     assumptions: Mapped[list["ProjectionAssumption"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     projected_financials: Mapped[list["ProjectedFinancial"]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -60,10 +70,15 @@ class HistoricalData(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "statement_type", "line_item", "year"),
         Index("ix_historical_data_project_id", "project_id"),
+        Index("ix_historical_data_entity_id", "entity_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
+    # Phase 0: entity_id — set for all new records; legacy records use project_id only
+    entity_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     statement_type: Mapped[str] = mapped_column(
         SAEnum("PNL", "BS", "CF", name="statement_type_enum"), nullable=False
     )
@@ -108,10 +123,15 @@ class ProjectionAssumption(Base):
     __tablename__ = "projection_assumptions"
     __table_args__ = (
         Index("ix_projection_assumptions_project_id", "project_id"),
+        Index("ix_projection_assumptions_entity_id", "entity_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
+    # Phase 0: entity_id — set for all new records; legacy records use project_id only
+    entity_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     scenario_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=True)
     module: Mapped[str] = mapped_column(
         SAEnum("revenue", "cogs", "opex", "da", "working_capital", "capex", "debt", "tax",
@@ -167,6 +187,10 @@ class ProjectedFinancial(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
+    # Phase 0: entity_id — set for all new records; legacy records use project_id only
+    entity_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     scenario_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=True)
     statement_type: Mapped[str] = mapped_column(
         SAEnum("PNL", "BS", "CF", name="proj_statement_type_enum"), nullable=False

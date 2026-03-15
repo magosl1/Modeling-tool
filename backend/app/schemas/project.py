@@ -10,6 +10,8 @@ class ProjectCreate(BaseModel):
     scale: str = "thousands"
     fiscal_year_end: Optional[date] = None
     projection_years: int = 5
+    project_type: str = "single_entity"
+    base_currency: Optional[str] = None  # defaults to currency if not set
 
 
 class ProjectUpdate(BaseModel):
@@ -18,6 +20,8 @@ class ProjectUpdate(BaseModel):
     scale: Optional[str] = None
     fiscal_year_end: Optional[date] = None
     projection_years: Optional[int] = None
+    project_type: Optional[str] = None
+    base_currency: Optional[str] = None
 
 
 class ProjectOut(BaseModel):
@@ -28,6 +32,8 @@ class ProjectOut(BaseModel):
     fiscal_year_end: Optional[date]
     projection_years: int
     status: str
+    project_type: str
+    base_currency: str
     created_at: Any
     updated_at: Any
 

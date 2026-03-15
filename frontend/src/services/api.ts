@@ -1,6 +1,7 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
   Project, ProjectCreate, ProjectUpdate,
+  Entity, EntityCreate, EntityUpdate,
   HistoricalResponse, AllAssumptions, AssumptionItem, ModuleStatus,
   ProjectionsResponse, RunProjectionResponse,
   ValuationInputCreate, ValuationResult,
@@ -56,6 +57,28 @@ export const projectsApi = {
   get: (id: string): Promise<AxiosResponse<Project>> => api.get(`/projects/${id}`),
   update: (id: string, data: ProjectUpdate): Promise<AxiosResponse<Project>> => api.put(`/projects/${id}`, data),
   delete: (id: string): Promise<AxiosResponse<void>> => api.delete(`/projects/${id}`),
+}
+
+// Entities (Phase 0 — Universal Platform)
+export const entitiesApi = {
+  list: (projectId: string): Promise<AxiosResponse<Entity[]>> =>
+    api.get(`/projects/${projectId}/entities`),
+  create: (projectId: string, data: EntityCreate): Promise<AxiosResponse<Entity>> =>
+    api.post(`/projects/${projectId}/entities`, data),
+  get: (entityId: string): Promise<AxiosResponse<Entity>> =>
+    api.get(`/entities/${entityId}`),
+  update: (entityId: string, data: EntityUpdate): Promise<AxiosResponse<Entity>> =>
+    api.put(`/entities/${entityId}`, data),
+  delete: (entityId: string): Promise<AxiosResponse<void>> =>
+    api.delete(`/entities/${entityId}`),
+  clone: (entityId: string, data: { new_name: string; overrides?: Record<string, unknown> }): Promise<AxiosResponse<Entity>> =>
+    api.post(`/entities/${entityId}/clone`, data),
+  bulkCreate: (projectId: string, data: { template: EntityCreate; count: number; naming_pattern?: string }): Promise<AxiosResponse<Entity[]>> =>
+    api.post(`/projects/${projectId}/entities/bulk-create`, data),
+  getHistorical: (entityId: string): Promise<AxiosResponse<HistoricalResponse>> =>
+    api.get(`/entities/${entityId}/historical`),
+  getProjections: (entityId: string, scenarioId?: string): Promise<AxiosResponse<Record<string, Record<string, Record<string, string>>>>> =>
+    api.get(`/entities/${entityId}/projections`, { params: scenarioId ? { scenario_id: scenarioId } : {} }),
 }
 
 // Historical

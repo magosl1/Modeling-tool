@@ -25,6 +25,11 @@ export default function App() {
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/projects/new" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
+        {/*
+          /projects/:id                     → Project workspace (entity tree + single entity view)
+          /projects/:id/entities/:entityId  → Entity-specific workspace
+          /projects/:id/consolidated        → Consolidated view (multi_entity)
+        */}
         <Route path="/projects/:id/*" element={<PrivateRoute><ProjectWorkspace /></PrivateRoute>} />
       </Routes>
     </ErrorBoundary>
