@@ -14,6 +14,10 @@ from app.services.utils import ZERO, d
 @dataclass
 class DCFResult:
     fcff_by_year: Dict[int, Decimal] = field(default_factory=dict)
+    fcff_build_up: Dict[int, Dict[str, Decimal]] = field(default_factory=dict)
+    normalized_terminal_year: Optional[int] = None
+    terminal_fcff_build_up: Dict[str, Decimal] = field(default_factory=dict)
+    implied_multiples: Dict[int, Dict[str, Optional[Decimal]]] = field(default_factory=dict)
     enterprise_value: Decimal = ZERO
     net_debt: Decimal = ZERO
     equity_value: Decimal = ZERO
@@ -49,6 +53,8 @@ class DCFEngine:
         self.discounting_convention = discounting_convention
         self.shares_outstanding = shares_outstanding
         self.tv_method = terminal_value_method
+        self.fcff_by_year: Dict[int, Decimal] = {}
+        self.net_debt: Decimal = ZERO
 
     def _get_pnl(self, item: str, year: int) -> Decimal:
         return d(self.pnl.get(item, {}).get(year))
@@ -59,7 +65,7 @@ class DCFEngine:
     def _get_cf(self, item: str, year: int) -> Decimal:
         return d(self.cf.get(item, {}).get(year))
 
-    def _compute_fcff(self, year: int) -> Decimal:
+    def _compute_fcff(self, year: int) -> Dict[str, Decimal]:
         """FCFF = EBIT × (1 − Tax Rate) + D&A + Amortization − ΔWC − Capex"""
         ebit = self._get_pnl("EBIT", year)
         tax = self._get_pnl("Tax", year)
@@ -69,13 +75,24 @@ class DCFEngine:
         tax_rate = (tax / ebt) if ebt != ZERO else ZERO
         tax_rate = max(ZERO, min(Decimal("1"), tax_rate))
 
-        nopat = ebit * (1 - tax_rate)
+        taxes_nopat = ebit * tax_rate
+        nopat = ebit - taxes_nopat
         da = self._get_pnl("D&A", year)
         amort = self._get_pnl("Amortization of Intangibles", year)
         delta_wc = -self._get_cf("Changes in Working Capital", year)  # CF shows as subtracted already
         capex = abs(self._get_cf("Capex", year))  # Capex is negative in CF statement
 
-        return nopat + da + amort - delta_wc - capex
+        fcff = nopat + da + amort - delta_wc - capex
+        
+        return {
+            "EBIT": ebit,
+            "Taxes": -taxes_nopat,
+            "NOPAT": nopat,
+            "D&A & Amort": da + amort,
+            "Less: Changes in WC": -delta_wc,
+            "Less: Capex": -capex,
+            "FCFF": fcff
+        }
 
     def _discount_factor(self, year_idx: int) -> Decimal:
         """Compute discount factor. year_idx is 1-based (1 = first projection year)."""
@@ -86,7 +103,7 @@ class DCFEngine:
         return (1 + self.wacc / 100) ** t
 
     def _compute_terminal_value(self, last_fcff: Decimal, last_year: int) -> Decimal:
-        if self.tv_method == "exit_multiple" and self.exit_multiple:
+        if self.tv_method == "exit_multiple" and self.exit_multiple is not None:
             ebitda = (
                 self._get_pnl("EBIT", last_year)
                 + self._get_pnl("D&A", last_year)
@@ -123,7 +140,7 @@ class DCFEngine:
                         pv_fcffs += fcff / (1 + w / 100) ** t
 
                     last_fcff = d(self.fcff_by_year.get(self.years[-1], ZERO))
-                    if self.tv_method == "exit_multiple" and self.exit_multiple:
+                    if self.tv_method == "exit_multiple" and self.exit_multiple is not None:
                         last_year = self.years[-1]
                         ebitda = (
                             self._get_pnl("EBIT", last_year)
@@ -156,11 +173,14 @@ class DCFEngine:
     def run(self) -> DCFResult:
         result = DCFResult(method_used=self.tv_method)
         self.fcff_by_year = {}
+        result.fcff_build_up = {}
 
         # Compute FCFF per year
         for year in self.years:
-            fcff = self._compute_fcff(year)
+            build_up = self._compute_fcff(year)
+            fcff = build_up["FCFF"]
             self.fcff_by_year[year] = fcff
+            result.fcff_build_up[year] = build_up
 
         result.fcff_by_year = {y: v for y, v in self.fcff_by_year.items()}
 
@@ -199,8 +219,35 @@ class DCFEngine:
         result.equity_value = result.enterprise_value - net_debt
 
         # Value per Share
-        if self.shares_outstanding and self.shares_outstanding > 0:
+        if self.shares_outstanding is not None and self.shares_outstanding > 0:
             result.value_per_share = result.equity_value / self.shares_outstanding
+
+        # Terminal Year Build-up (Normalized + 1)
+        result.normalized_terminal_year = last_year + 1
+        g_rate = self.terminal_growth_rate / 100
+        result.terminal_fcff_build_up = {
+            k: v * (1 + g_rate) for k, v in result.fcff_build_up[last_year].items()
+        }
+
+        # Implied Multiples
+        for year in self.years:
+            ebitda = (
+                self._get_pnl("EBIT", year)
+                + self._get_pnl("D&A", year)
+                + self._get_pnl("Amortization of Intangibles", year)
+            )
+            revenue = self._get_pnl("Revenue", year)
+            net_income = self._get_pnl("Net Income", year)
+            
+            multiples: Dict[str, Optional[Decimal]] = {}
+            if ebitda > 0:
+                multiples["EV / EBITDA"] = result.enterprise_value / ebitda
+            if revenue > 0:
+                multiples["EV / Revenue"] = result.enterprise_value / revenue
+            if net_income > 0 and result.equity_value > 0:
+                multiples["P / E"] = result.equity_value / net_income
+                
+            result.implied_multiples[year] = multiples
 
         # Sensitivity Table
         result.sensitivity_table = self._build_sensitivity(self.wacc, self.terminal_growth_rate)

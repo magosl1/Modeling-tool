@@ -103,9 +103,12 @@ def save_module_assumptions(
         db.flush()
 
         for param in item.get("params", []):
-            param_value = param.get("value", "0")
+            param_value = param.get("value")
             if param_value == "" or param_value is None:
-                param_value = "0"
+                param_value = None
+            else:
+                param_value = str(param_value)
+                
             db.add(AssumptionParam(
                 id=str(uuid.uuid4()),
                 assumption_id=assumption.id,
@@ -147,8 +150,13 @@ def get_module_status(
         if not module_assumptions:
             status = "not_started"
         else:
-            all_have_params = all(len(a.params) > 0 for a in module_assumptions)
-            if all_have_params and has_historical:
+            # An assumption is considered "configured" if it has a projection method.
+            # It's "complete" if it's configured and historical data exists.
+            all_configured = all(
+                a.projection_method and a.projection_method.strip() != ""
+                for a in module_assumptions
+            )
+            if all_configured and has_historical:
                 status = "complete"
             else:
                 status = "configured"

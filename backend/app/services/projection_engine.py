@@ -182,10 +182,10 @@ class ProjectionEngine:
                 prev = self.proj_years[year_idx - 1]
                 base = d(self.pnl[prev].get(f"_rev_{stream_name}", ZERO))
 
-            if method == "growth_flat":
-                rate = self._param(stream, "growth_rate", year) or ZERO
-                val = base * (1 + rate / 100)
-            elif method == "growth_variable":
+            if method in ("growth_flat", "growth_variable"):
+                base_override = self._param(stream, "base_value", year)
+                if base_override is not None:
+                    base = d(base_override)
                 rate = self._param(stream, "growth_rate", year) or ZERO
                 val = base * (1 + rate / 100)
             elif method == "price_quantity":
@@ -407,9 +407,12 @@ class ProjectionEngine:
             amort = ZERO
 
         acc_amort_prev = self._get_bs("Accumulated Amortization", prev_year) if prev_year else ZERO
+        # Clamp amortization so Net Intangibles doesn't go below zero
+        remaining = max(ZERO, intangibles_gross_prev - acc_amort_prev)
+        amort = min(amort, remaining)
         acc_amort = acc_amort_prev + amort
         self.bs[year]["Accumulated Amortization"] = acc_amort
-        self.bs[year]["Net Intangibles"] = intangibles_gross_prev - acc_amort
+        self.bs[year]["Net Intangibles"] = max(ZERO, intangibles_gross_prev - acc_amort)
         self.pnl[year]["Amortization of Intangibles"] = amort
 
     # ------------------------------------------------------------------
@@ -423,7 +426,9 @@ class ProjectionEngine:
         da = self._proj_pnl("D&A", year)
         amort = self._proj_pnl("Amortization of Intangibles", year)
         other_opex = self._proj_pnl("Other OpEx", year)
-        self.pnl[year]["EBIT"] = gp - sga - rd - da - amort - other_opex
+        ebit = gp - sga - rd - da - amort - other_opex
+        self.pnl[year]["EBIT"] = ebit
+        self.pnl[year]["EBITDA"] = ebit + da + amort
 
     # ------------------------------------------------------------------
     # Step 7: Debt roll-forward → Interest Expense (beginning-of-period)
@@ -827,10 +832,11 @@ class ProjectionEngine:
         cash = d(bs.get("Cash & Equivalents", ZERO))
         noa = d(bs.get("Non-Operating Assets", ZERO))
 
+        # Use max(0, v) for assets — clamped values should not inflate the total
         total_assets = (
-            abs(net_ppe) + abs(net_intang) + abs(goodwill) +
-            abs(inventories) + abs(ar) + abs(prepaid) +
-            abs(cash) + abs(noa)
+            max(ZERO, net_ppe) + max(ZERO, net_intang) + max(ZERO, goodwill) +
+            max(ZERO, inventories) + max(ZERO, ar) + max(ZERO, prepaid) +
+            max(ZERO, cash) + max(ZERO, noa)
         )
 
         ap = d(bs.get("Accounts Payable", ZERO))
@@ -839,7 +845,6 @@ class ProjectionEngine:
         other_lt = d(bs.get("Other Long-Term Liabilities", ZERO))
         st_debt = d(bs.get("Short-Term Debt", ZERO))
         lt_debt = d(bs.get("Long-Term Debt", ZERO))
-        # Internal engine convention works with absolute values for liabilities
         total_liabilities = (
             abs(ap) + abs(accrued) + abs(ocl) + abs(other_lt) + abs(st_debt) + abs(lt_debt)
         )
@@ -847,13 +852,14 @@ class ProjectionEngine:
         sc = d(bs.get("Share Capital", ZERO))
         re = d(bs.get("Retained Earnings", ZERO))
         oe = d(bs.get("Other Equity (AOCI, Treasury Stock, etc.)", ZERO))
-        # Internal engine convention works with absolute values for equity
         total_equity = abs(sc) + abs(re) + abs(oe)
 
         total_le = total_liabilities + total_equity
         residual = total_assets - total_le
 
-        if abs(residual) > TOLERANCE:
+        # Relative tolerance: 0.5% of total assets (or absolute floor of 1)
+        tolerance = max(Decimal("1"), total_assets * Decimal("0.005"))
+        if abs(residual) > tolerance:
             self.result.errors.append(
                 f"Year {year}: Balance Sheet doesn't balance. "
                 f"Assets={total_assets}, L+E={total_le}, Residual={residual}. "

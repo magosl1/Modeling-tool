@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { projectsApi } from '../../services/api'
+import { projectsApi, sharingApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import type { Project } from '../../types/api'
 import toast from 'react-hot-toast'
@@ -20,6 +20,11 @@ export default function Dashboard() {
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.list().then(r => r.data),
+  })
+
+  const { data: sharedProjects = [], isLoading: sharedLoading } = useQuery({
+    queryKey: ['projects-shared-with-me'],
+    queryFn: () => sharingApi.getSharedWithMe().then(r => r.data),
   })
 
   const deleteMutation = useMutation({
@@ -89,6 +94,38 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Shared with Me Section */}
+        {sharedProjects.length > 0 && (
+          <div className="mt-12 border-t border-gray-200 pt-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <span>👥 Shared with Me</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sharedProjects.map((p: any) => (
+                <div key={p.id} className="card hover:shadow-md transition-shadow border-l-4 border-l-blue-400">
+                  <div className="flex items-start justify-between mb-3">
+                    <Link to={`/projects/${p.id}`} className="text-lg font-semibold text-gray-900 hover:text-primary-600">
+                      {p.name}
+                    </Link>
+                    <span className="badge-configured flex items-center gap-1">
+                      {p.role === 'writer' ? '🖋️ Editor' : '👁️ Viewer'}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p>Owner: {p.owner_email || 'Unknown'}</p>
+                    <p>{p.currency} · {p.scale}</p>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <Link to={`/projects/${p.id}`} className="btn-primary text-sm flex-1 text-center">
+                      Open Project
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

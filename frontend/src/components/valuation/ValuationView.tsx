@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { valuationApi } from '../../services/api'
 import type { ValuationResult } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
+import MonteCarloView from './MonteCarloView'
 import toast from 'react-hot-toast'
 
 interface Props { projectId: string }
@@ -18,6 +19,7 @@ interface ValuationForm {
 }
 
 export default function ValuationView({ projectId }: Props) {
+  const [valTab, setValTab] = useState<'dcf' | 'mc'>('dcf')
   const fmt = useFormatNumber()
   const { register, handleSubmit, watch } = useForm<ValuationForm>({
     defaultValues: {
@@ -67,12 +69,26 @@ export default function ValuationView({ projectId }: Props) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">DCF Valuation</h2>
-        <p className="text-sm text-gray-500 mt-1">Enter WACC and terminal value assumptions to compute enterprise and equity value.</p>
+      <div className="flex items-center gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Valuation</h2>
+          <p className="text-sm text-gray-500 mt-1">DCF valuation and probabilistic simulation.</p>
+        </div>
+        <div className="ml-auto flex gap-1 border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setValTab('dcf')}
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${valTab === 'dcf' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >DCF</button>
+          <button
+            onClick={() => setValTab('mc')}
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${valTab === 'mc' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >🎲 Monte Carlo</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {valTab === 'mc' && <MonteCarloView projectId={projectId} />}
+
+      {valTab === 'dcf' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Input Panel */}
         <div className="card">
           <h3 className="font-medium text-gray-900 mb-4">Valuation Inputs</h3>
@@ -152,54 +168,100 @@ export default function ValuationView({ projectId }: Props) {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
-      {/* FCFF by Year */}
-      {result?.fcff_by_year && (
+      {valTab === 'dcf' && result?.fcff_build_up && (
         <div className="card">
-          <h3 className="font-medium text-gray-900 mb-4">Free Cash Flow to Firm (FCFF)</h3>
+          <h3 className="font-medium text-gray-900 mb-4">Free Cash Flow to Firm (FCFF) Build-up</h3>
           <div className="overflow-x-auto">
             <table className="text-sm w-full">
               <thead>
                 <tr className="border-b border-gray-200">
-                  {Object.keys(result.fcff_by_year).map(y => (
+                  <th className="text-left py-2 px-4 font-medium text-gray-500">Line Item</th>
+                  {Object.keys(result.fcff_build_up).map(y => (
                     <th key={y} className="text-right py-2 px-4 text-blue-600 font-medium">{y}</th>
                   ))}
+                  {result.normalized_terminal_year && (
+                    <th className="text-right py-2 px-4 text-green-600 font-medium whitespace-nowrap">
+                      Terminal ({result.normalized_terminal_year})
+                    </th>
+                  )}
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  {Object.values(result.fcff_by_year).map((v, i) => (
-                    <td key={i} className="text-right py-2 px-4 tabular-nums">{fmt(v)}</td>
-                  ))}
-                </tr>
+              <tbody className="divide-y divide-gray-100">
+                {['EBIT', 'Taxes', 'NOPAT', 'D&A & Amort', 'Less: Changes in WC', 'Less: Capex', 'FCFF'].map((row) => (
+                  <tr key={row} className={row === 'FCFF' ? 'font-semibold bg-gray-50' : ''}>
+                    <td className="py-2 px-4 font-medium text-gray-700 whitespace-nowrap">{row}</td>
+                    {Object.values(result.fcff_build_up).map((yearData: any, i: number) => (
+                      <td key={i} className={`text-right py-2 px-4 tabular-nums ${row === 'FCFF' ? 'text-blue-700' : ''}`}>
+                        {fmt(yearData[row])}
+                      </td>
+                    ))}
+                    {result.terminal_fcff_build_up && (
+                      <td className={`text-right py-2 px-4 tabular-nums ${row === 'FCFF' ? 'text-green-700 font-bold' : 'text-gray-600'}`}>
+                        {fmt(result.terminal_fcff_build_up[row])}
+                      </td>
+                    )}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Sensitivity Table */}
-      {result?.sensitivity_table && (
+      {valTab === 'dcf' && result?.implied_multiples && (
+        <div className="card">
+          <h3 className="font-medium text-gray-900 mb-4">Implied Multiples</h3>
+          <div className="overflow-x-auto">
+            <table className="text-sm w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-4 font-medium text-gray-500">Multiple</th>
+                  {Object.keys(result.implied_multiples).map(y => (
+                    <th key={y} className="text-right py-2 px-4 text-gray-600 font-medium">{y}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {['EV / EBITDA', 'EV / Revenue', 'P / E'].map(mult => (
+                  <tr key={mult}>
+                    <td className="py-2 px-4 font-medium text-gray-700 whitespace-nowrap">{mult}</td>
+                    {Object.values(result.implied_multiples).map((yearData: any, i: number) => (
+                      <td key={i} className="text-right py-2 px-4 tabular-nums">
+                        {yearData[mult] ? `${fmt(yearData[mult])}x` : 'N/A'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {valTab === 'dcf' && result?.sensitivity_table && (
         <div className="card">
           <h3 className="font-medium text-gray-900 mb-1">Sensitivity Analysis</h3>
           <p className="text-xs text-gray-500 mb-4">WACC (rows) × Terminal Growth Rate (cols) — showing Equity Value per Share (or Equity Value if no shares entered)</p>
-          <div className="overflow-x-auto">
-            <table className="text-xs w-full">
+          <div className="overflow-x-auto border border-gray-200 rounded-lg">
+            <table className="text-sm w-full">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="py-2 px-3 text-left font-medium">WACC \ g</th>
-                  {Object.keys(Object.values(result.sensitivity_table)[0] || {}).map(g => (
-                    <th key={g} className="py-2 px-3 text-right font-medium text-blue-600">{g}%</th>
+                <tr className="bg-gray-100 border-b border-gray-200">
+                  <th className="py-2.5 px-3 text-center font-semibold text-gray-700 border-r border-gray-200">WACC \ g</th>
+                  {Object.keys((Object.values(result.sensitivity_table)[0] as Record<string, unknown>) || {}).map(g => (
+                    <th key={g} className="py-2.5 px-3 text-center font-medium text-gray-700">{g}%</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(result.sensitivity_table).map(([wacc, gVals]) => (
-                  <tr key={wacc} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-2 px-3 font-medium text-gray-700">{wacc}%</td>
-                    {Object.values(gVals).map((v, i) => (
-                      <td key={i} className="py-2 px-3 text-right tabular-nums">{fmt(v)}</td>
+                {Object.entries(result.sensitivity_table).map(([wacc, gVals]: [string, any]) => (
+                  <tr key={wacc} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                    <td className="py-2.5 px-3 font-semibold text-gray-700 text-center border-r border-gray-200 bg-gray-50">{wacc}%</td>
+                    {Object.values(gVals).map((v: any, i: number) => (
+                      <td key={i} className="py-2.5 px-3 text-center tabular-nums text-gray-800">
+                        {fmt(v)}
+                      </td>
                     ))}
                   </tr>
                 ))}

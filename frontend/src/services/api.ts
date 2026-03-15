@@ -115,4 +115,55 @@ export const ratiosApi = {
     api.get(`/projects/${projectId}/ratios`),
 }
 
+// Block 1 — Scenarios
+export const scenariosApi = {
+  list: (projectId: string) => api.get(`/projects/${projectId}/scenarios`),
+  create: (projectId: string, data: any) => api.post(`/projects/${projectId}/scenarios`, data),
+  activate: (projectId: string, scenarioId: string) => api.post(`/projects/${projectId}/scenarios/${scenarioId}/activate`),
+  copy: (projectId: string, scenarioId: string) => api.post(`/projects/${projectId}/scenarios/${scenarioId}/copy`),
+  delete: (projectId: string, scenarioId: string) => api.delete(`/projects/${projectId}/scenarios/${scenarioId}`),
+}
+
+// Block 2 — Debt Schedule (Revolver + Term Loans)
+export const debtApi = {
+  getRevolver: (projectId: string, scenarioId?: string) =>
+    api.get(`/projects/${projectId}/debt/revolver`, { params: { scenario_id: scenarioId } }),
+  saveRevolver: (projectId: string, data: any) =>
+    api.put(`/projects/${projectId}/debt/revolver`, data),
+  getTranches: (projectId: string, scenarioId?: string) =>
+    api.get(`/projects/${projectId}/debt/tranches`, { params: { scenario_id: scenarioId } }),
+  saveTranches: (projectId: string, data: any[], scenarioId?: string) =>
+    api.put(`/projects/${projectId}/debt/tranches`, data, { params: { scenario_id: scenarioId } }),
+}
+
+// Block 3 — FX Rates
+export const fxApi = {
+  get: (projectId: string) => api.get(`/projects/${projectId}/fx`),
+  save: (projectId: string, data: any) => api.put(`/projects/${projectId}/fx`, data),
+}
+
+// Block 4 — Monte Carlo Simulation
+export const simulationApi = {
+  run: (projectId: string, data: any) => api.post(`/projects/${projectId}/monte-carlo`, data),
+  getLatest: (projectId: string, scenarioId?: string) =>
+    api.get(`/projects/${projectId}/monte-carlo/latest`, { params: { scenario_id: scenarioId } }),
+}
+
+// Block 5 — Collaboration / Sharing
+export const sharingApi = {
+  list: (projectId: string) => api.get(`/projects/${projectId}/share`),
+  share: (projectId: string, data: { email: string; role: string }) =>
+    api.post(`/projects/${projectId}/share`, data),
+  revoke: (projectId: string, userId: string) =>
+    api.delete(`/projects/${projectId}/share/${userId}`),
+  getSharedWithMe: () => api.get('/projects/shared-with-me'),
+}
+
+// Block 6 — External Curves / Indices
+export const curvesApi = {
+  get: (projectId: string) => api.get(`/projects/${projectId}/curves`),
+  save: (projectId: string, data: Record<string, { is_percentage: boolean, values: Record<string, number> }>) => 
+    api.put(`/projects/${projectId}/curves`, data),
+}
+
 export default api

@@ -3,7 +3,7 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, metadata
+from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, scenarios, debt, fx, simulation, sharing, curves, metadata
 from app.core.config import settings
 
 logger = logging.getLogger("uvicorn.access")
@@ -62,6 +62,23 @@ app.include_router(ratios.router, prefix=settings.API_V1_STR)
 # Metadata
 app.include_router(metadata.router, prefix=settings.API_V1_STR)
 
+# Scenarios
+app.include_router(scenarios.router, prefix=settings.API_V1_STR)
+
+# Debt schedule (Block 2)
+app.include_router(debt.router, prefix=settings.API_V1_STR)
+
+# FX rates (Block 3)
+app.include_router(fx.router, prefix=settings.API_V1_STR)
+
+# Monte Carlo simulation (Block 4)
+app.include_router(simulation.router, prefix=settings.API_V1_STR)
+
+# Collaboration / Sharing (Block 5)
+app.include_router(sharing.router, prefix=settings.API_V1_STR)
+
+# External Curves (Block 6)
+app.include_router(curves.router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health():

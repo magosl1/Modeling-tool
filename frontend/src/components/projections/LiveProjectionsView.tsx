@@ -10,7 +10,7 @@ interface Props { projectId: string; module: string; }
 
 const PNL_ITEMS = [
     'Revenue', 'Cost of Goods Sold', 'Gross Profit', 'SG&A', 'R&D', 'D&A',
-    'Amortization of Intangibles', 'Other OpEx', 'EBIT', 'Interest Income',
+    'Amortization of Intangibles', 'Other OpEx', 'EBIT', 'EBITDA', 'Interest Income',
     'Interest Expense', 'Other Non-Operating Income / (Expense)', 'EBT', 'Tax', 'Net Income',
 ]
 
@@ -32,11 +32,16 @@ const CF_ITEMS = [
 ]
 
 const SUBTOTALS = new Set([
-    'Gross Profit', 'EBIT', 'EBT', 'Net Income',
+    'Gross Profit', 'EBIT', 'EBITDA', 'EBT', 'Net Income',
     'Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Net Change in Cash',
 ])
 
-function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: StatementData; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
+const COST_LINES = new Set([
+    'Cost of Goods Sold', 'SG&A', 'R&D', 'D&A', 'Amortization of Intangibles',
+    'Other OpEx', 'Interest Expense', 'Tax',
+])
+
+function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: Record<string, Record<string, string>>; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
     return (
         <div className="overflow-auto border rounded-b-lg border-t-0 bg-white" style={{ maxHeight: '600px' }}>
             <table className="w-full text-xs">
@@ -51,6 +56,7 @@ function FinancialTable({ items, data, years, title, fmt }: { items: string[]; d
                 <tbody>
                     {items.map(item => {
                         const isSubtotal = SUBTOTALS.has(item)
+                        const isCost = COST_LINES.has(item)
                         return (
                             <tr
                                 key={item}
@@ -59,11 +65,22 @@ function FinancialTable({ items, data, years, title, fmt }: { items: string[]; d
                                 <td className="py-1.5 pl-3 pr-2 text-gray-700 sticky left-0 bg-white z-10 w-48 whitespace-nowrap overflow-hidden text-ellipsis shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]" title={item}>
                                     {item}
                                 </td>
-                                {years.map(y => (
-                                    <td key={y} className="py-1.5 px-2 text-right text-gray-900 tabular-nums">
-                                        {fmt(data[item]?.[y])}
-                                    </td>
-                                ))}
+                                {years.map(y => {
+                                    const raw = data[item]?.[y]
+                                    let displayVal: string | number | undefined = raw
+                                    if (isCost && raw !== undefined && raw !== null && raw !== '') {
+                                        const n = parseFloat(String(raw))
+                                        if (!isNaN(n) && n > 0) displayVal = -n
+                                    }
+                                    const num = displayVal !== undefined ? parseFloat(String(displayVal)) : NaN
+                                    const isNeg = !isNaN(num) && num < 0
+                                    const text = isNaN(num) ? '—' : isNeg ? `(${fmt(Math.abs(num))})` : fmt(num)
+                                    return (
+                                        <td key={y} className={`py-1.5 px-2 text-right tabular-nums ${isNeg ? 'text-red-500' : 'text-gray-900'}`}>
+                                            {text}
+                                        </td>
+                                    )
+                                })}
                             </tr>
                         )
                     })}

@@ -7,6 +7,10 @@ import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
 import ValuationView from '../valuation/ValuationView'
 import LiveProjectionsView from '../projections/LiveProjectionsView'
+import DebtSchedulePanel from '../project/DebtSchedulePanel'
+import FXRatesPanel from '../project/FXRatesPanel'
+import IndexCurvePanel from '../project/IndexCurvePanel'
+import SharePanel from '../project/SharePanel'
 import clsx from 'clsx'
 
 const STATUS_ICON: Record<string, string> = {
@@ -73,6 +77,7 @@ export default function ProjectWorkspace() {
             { to: 'assumptions', label: 'Assumptions' },
             { to: 'projections', label: 'Projections' },
             { to: 'valuation', label: 'Valuation' },
+            { to: 'share', label: '👥 Share' },
           ].map(tab => (
             <NavLink
               key={tab.to}
@@ -97,9 +102,9 @@ export default function ProjectWorkspace() {
       )}>
         {/* Left sidebar: module status (only on assumptions route) */}
         {isAssumptionsRoute && (
-          <aside className="w-48 shrink-0">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Modules</h3>
-            <nav className="space-y-1">
+          <aside className="w-48 shrink-0 pb-8">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Core Modules</h3>
+            <nav className="space-y-1 mb-6">
               {MODULES.map(m => (
                 <NavLink
                   key={m.key}
@@ -114,6 +119,20 @@ export default function ProjectWorkspace() {
                 </NavLink>
               ))}
             </nav>
+            
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Advanced Setup</h3>
+            <nav className="space-y-1 bg-white rounded-lg border border-gray-200 p-2 shadow-sm">
+              <NavLink to={`/projects/${id}/assumptions/structural_debt`} className={({ isActive }) => clsx('flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors', isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}>
+                <span>🏦</span> Debt Schedule
+              </NavLink>
+              <NavLink to={`/projects/${id}/assumptions/fx`} className={({ isActive }) => clsx('flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors', isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}>
+                <span>💱</span> FX Rates
+              </NavLink>
+              <NavLink to={`/projects/${id}/assumptions/curves`} className={({ isActive }) => clsx('flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors', isActive ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}>
+                <span>📈</span> External Curves
+              </NavLink>
+            </nav>
+
             {allComplete && (
               <div className="mt-4 p-3 bg-green-50 rounded-lg text-xs text-green-700">
                 All modules complete! You can run projections.
@@ -127,9 +146,13 @@ export default function ProjectWorkspace() {
           <Routes>
             <Route index element={<UploadHistorical projectId={id!} project={project} />} />
             <Route path="assumptions" element={<AssumptionsPanel projectId={id!} />} />
+            <Route path="assumptions/structural_debt" element={<DebtSchedulePanel projectId={id!} />} />
+            <Route path="assumptions/fx" element={<FXRatesPanel projectId={id!} />} />
+            <Route path="assumptions/curves" element={<IndexCurvePanel projectId={id!} />} />
             <Route path="assumptions/:module" element={<AssumptionsPanel projectId={id!} />} />
-            <Route path="projections" element={<ProjectionsView projectId={id!} allModulesComplete={allComplete} />} />
+            <Route path="projections" element={<ProjectionsView projectId={id!} allModulesComplete={allComplete} project={project} />} />
             <Route path="valuation" element={<ValuationView projectId={id!} />} />
+            <Route path="share" element={<div className="card"><SharePanel projectId={id!} /></div>} />
           </Routes>
         </main>
 

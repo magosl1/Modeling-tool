@@ -1,6 +1,6 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assumptionsApi, projectionsApi, projectsApi } from '../../services/api'
+import { assumptionsApi, projectionsApi, projectsApi, historicalApi } from '../../services/api'
 import type { AssumptionItem } from '../../types/api'
 import toast from 'react-hot-toast'
 import ModuleConfigurator from './ModuleConfigurator'
@@ -23,7 +23,6 @@ const MODULES = [
 
 export default function AssumptionsPanel({ projectId }: Props) {
   const { module: activeModule } = useParams<{ module?: string }>()
-  const navigate = useNavigate()
   const qc = useQueryClient()
 
   const currentModule = activeModule || MODULES[0].key
@@ -49,6 +48,13 @@ export default function AssumptionsPanel({ projectId }: Props) {
     enabled: !!currentModule,
   })
 
+  // Fetch historical data to show inline context in the configurator
+  const { data: historicalData } = useQuery({
+    queryKey: ['historical', projectId],
+    queryFn: () => historicalApi.getData(projectId).then(r => r.data),
+    staleTime: 60000,
+  })
+
   const runMutation = useMutation({
     mutationFn: () => projectionsApi.run(projectId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projections', projectId] }),
@@ -66,7 +72,6 @@ export default function AssumptionsPanel({ projectId }: Props) {
     onError: () => toast.error('Failed to save assumptions'),
   })
 
-  // We consider it "saving" if either the save or the subsequent run is pending
   const isPending = saveMutation.isPending || runMutation.isPending
 
   if (!activeModule) {
@@ -92,6 +97,7 @@ export default function AssumptionsPanel({ projectId }: Props) {
           module={currentModule}
           initialData={moduleData || []}
           projectionYears={projectionYears}
+          historicalData={historicalData}
           onSave={(data) => saveMutation.mutate(data)}
           isSaving={isPending}
         />
