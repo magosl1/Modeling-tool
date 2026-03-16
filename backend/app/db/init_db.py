@@ -2,6 +2,7 @@
 from app.db.base import Base, engine
 from app.models.user import User
 from app.models.entity import Entity  # noqa: F401 — registers table with metadata
+from app.models.eliminations import IntercompanyTransaction  # noqa: F401
 from app.models.project import (
     Project, Scenario, HistoricalData, RevenueStream, RevenueStreamParam,
     ProjectionAssumption, AssumptionParam, NOLBalance,

@@ -192,6 +192,22 @@ export const revenueStreamsApi = {
     api.post(`/projects/${projectId}/revenue-streams/detect`),
 }
 
+// Phase 3 — Consolidated View + Intercompany Eliminations
+export const consolidatedApi = {
+  getProjections: (projectId: string, scenarioId?: string) =>
+    api.get(`/projects/${projectId}/consolidated/projections`, { params: scenarioId ? { scenario_id: scenarioId } : {} }),
+  getHistorical: (projectId: string) =>
+    api.get(`/projects/${projectId}/consolidated/historical`),
+  listEliminations: (projectId: string) =>
+    api.get(`/projects/${projectId}/eliminations`),
+  createElimination: (projectId: string, data: any) =>
+    api.post(`/projects/${projectId}/eliminations`, data),
+  updateElimination: (projectId: string, elimId: string, data: any) =>
+    api.put(`/projects/${projectId}/eliminations/${elimId}`, data),
+  deleteElimination: (projectId: string, elimId: string) =>
+    api.delete(`/projects/${projectId}/eliminations/${elimId}`),
+}
+
 // Block 6 — External Curves / Indices
 export const curvesApi = {
   get: (projectId: string) => api.get(`/projects/${projectId}/curves`),

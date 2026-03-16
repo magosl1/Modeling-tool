@@ -28,6 +28,7 @@ import IndexCurvePanel from './IndexCurvePanel'
 import SharePanel from './SharePanel'
 import EntityTree from './EntityTree'
 import EntityWorkspace from '../entity/EntityWorkspace'
+import ConsolidatedView from '../consolidation/ConsolidatedView'
 
 // ── Module status helpers ─────────────────────────────────────────────────────
 
@@ -192,16 +193,10 @@ export default function ProjectWorkspace() {
               }
             />
 
-            {/* Consolidated view (Phase 3 placeholder) */}
+            {/* Consolidated view (Phase 3) */}
             <Route
               path="consolidated"
-              element={
-                <div className="card p-8 text-center text-gray-500">
-                  <p className="text-2xl mb-2">📊</p>
-                  <p className="font-medium">Consolidated View</p>
-                  <p className="text-sm mt-1">Coming in Phase 3 — Consolidation Engine</p>
-                </div>
-              }
+              element={<ConsolidatedView projectId={id!} />}
             />
 
             {/* Share panel */}

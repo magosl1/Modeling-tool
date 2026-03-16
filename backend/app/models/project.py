@@ -62,6 +62,16 @@ class Scenario(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_base: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Display colour (hex, e.g. "#4472C4")
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True, default="#4472C4")
+    # Probability weight for probability-weighted valuation (0-1)
+    probability: Mapped[float | None] = mapped_column(nullable=True)
+    # Entity-level assumption overrides stored as JSON:
+    # {
+    #   "all": { "revenue": {"growth_rate": [0.05, 0.04, 0.03]} },
+    #   "<entity_id>": { "revenue": {"growth_rate": [0.10, 0.08, 0.06]} }
+    # }
+    overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
