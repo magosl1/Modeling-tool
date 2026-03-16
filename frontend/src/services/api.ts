@@ -85,7 +85,7 @@ export const entitiesApi = {
 export const historicalApi = {
   downloadTemplate: (projectId: string): Promise<AxiosResponse<Blob>> =>
     api.get(`/projects/${projectId}/template/historical`, { responseType: 'blob' }),
-  upload: (projectId: string, file: File): Promise<AxiosResponse<{ message: string; years: number[] }>> => {
+  upload: (projectId: string, file: File): Promise<AxiosResponse<{ message: string; years: number[]; detected_revenue_streams: string[] }>> => {
     const form = new FormData()
     form.append('file', file)
     return api.post(`/projects/${projectId}/upload/historical`, form)

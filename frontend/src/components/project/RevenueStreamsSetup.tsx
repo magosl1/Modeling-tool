@@ -105,7 +105,7 @@ export default function RevenueStreamsSetup({ projectId }: Props) {
           </p>
         </div>
         {!editing && (
-          <button className="btn btn-secondary btn-sm" onClick={startEditing}>
+          <button className="btn-secondary" onClick={startEditing}>
             {isMultiStream ? 'Edit Streams' : 'Add Revenue Streams'}
           </button>
         )}
@@ -154,14 +154,14 @@ export default function RevenueStreamsSetup({ projectId }: Props) {
           ))}
 
           <div className="flex items-center gap-2 pt-1">
-            <button className="btn btn-secondary btn-sm" onClick={addRow}>
+            <button className="btn-secondary" onClick={addRow}>
               + Add stream
             </button>
             <div className="flex-1" />
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(false)}>
+            <button className="btn-secondary" onClick={() => setEditing(false)}>
               Cancel
             </button>
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={isPending}>
+            <button className="btn-primary" onClick={handleSave} disabled={isPending}>
               {isPending ? 'Saving…' : 'Save'}
             </button>
           </div>

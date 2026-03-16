@@ -16,24 +16,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
-from datetime import datetime, timezone
 
 from app.db.base import get_db
 from app.models.user import User
-from app.models.project import RevenueStream, ProjectionAssumption, AssumptionParam
+from app.models.project import RevenueStream, ProjectionAssumption
 from app.api.deps import get_current_user, get_project_or_404
+from app.services.historical_validator import STANDARD_PNL_ITEMS  # single source of truth
 
 router = APIRouter(prefix="/projects", tags=["revenue-streams"])
-
-
-# ── Standard PNL items that are NOT revenue sub-lines ────────────────────────
-# Anything else found in the P&L before "Cost of Goods Sold" is a revenue line.
-STANDARD_PNL_ITEMS = {
-    "Revenue", "Total Revenue", "Cost of Goods Sold", "Gross Profit",
-    "SG&A", "R&D", "D&A", "Amortization of Intangibles", "Other OpEx",
-    "EBIT", "Interest Income", "Interest Expense",
-    "Other Non-Operating Income / (Expense)", "EBT", "Tax", "Net Income",
-}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -161,7 +151,7 @@ def save_revenue_streams(
 
 
 @router.post("/{project_id}/revenue-streams/detect")
-async def detect_revenue_streams(
+def detect_revenue_streams(
     project_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

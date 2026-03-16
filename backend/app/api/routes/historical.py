@@ -8,7 +8,7 @@ from app.models.project import Project, HistoricalData, RevenueStream
 from app.api.deps import get_current_user, get_project_or_404
 from app.services.template_generator import generate_historical_template
 from app.services.historical_validator import (
-    parse_historical_excel, validate_historical_data, STANDARD_PNL_ITEMS
+    parse_historical_excel, validate_historical_data,
 )
 from app.api.routes.revenue_streams import _sync_revenue_assumptions
 import uuid
