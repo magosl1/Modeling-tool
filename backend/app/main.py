@@ -3,7 +3,7 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, scenarios, debt, fx, simulation, sharing, curves, metadata, entities
+from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, scenarios, debt, fx, simulation, sharing, curves, metadata, entities, revenue_streams
 from app.core.config import settings
 
 logger = logging.getLogger("uvicorn.access")
@@ -82,6 +82,9 @@ app.include_router(curves.router, prefix=settings.API_V1_STR)
 
 # Phase 0: Entities (universal platform)
 app.include_router(entities.router, prefix=settings.API_V1_STR)
+
+# Revenue streams configuration
+app.include_router(revenue_streams.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")

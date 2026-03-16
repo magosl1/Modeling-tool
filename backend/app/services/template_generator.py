@@ -132,9 +132,18 @@ def _item_row(item_name: str, items_list, data_start_row: int = 2) -> int:
     return data_start_row  # fallback
 
 
+FORMULA_FILL = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+
 def _write_sheet_with_checks(ws, items, years: List[int], units_label: str,
-                              include_bucket: bool = False, sheet_type: str = "PNL"):
-    """Write a financial data sheet with embedded validation formulas."""
+                              include_bucket: bool = False, sheet_type: str = "PNL",
+                              formula_rows: dict = None):
+    """Write a financial data sheet with embedded validation formulas.
+
+    formula_rows: optional dict {item_name: formula_template} where formula_template
+    uses {col} as placeholder for the year column letter. Matching rows are written
+    with the formula instead of left blank, and styled with FORMULA_FILL.
+    """
     # Build headers
     if include_bucket:
         headers = ["Line Item", "Bucket", "Sign", "Units"] + [str(y) for y in years]
@@ -147,6 +156,8 @@ def _write_sheet_with_checks(ws, items, years: List[int], units_label: str,
     for col, header in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=header)
     _style_header(ws, len(headers))
+
+    year_cols = list(range(data_col_offset, data_col_offset + len(years)))
 
     # Write data rows
     data_start_row = 2
@@ -161,8 +172,19 @@ def _write_sheet_with_checks(ws, items, years: List[int], units_label: str,
             ws.cell(row=row_idx, column=1, value=item)
             ws.cell(row=row_idx, column=2, value=sign)
             ws.cell(row=row_idx, column=3, value=units_label)
+            # If this item has a pre-built formula, write it in each year column
+            if formula_rows and item in formula_rows:
+                for year_col in year_cols:
+                    col_letter = get_column_letter(year_col)
+                    formula = formula_rows[item].format(col=col_letter)
+                    cell = ws.cell(row=row_idx, column=year_col, value=formula)
+                    cell.fill = FORMULA_FILL
+                    cell.font = Font(italic=True, size=10)
+                ws.cell(row=row_idx, column=1).fill = FORMULA_FILL
+                ws.cell(row=row_idx, column=2).fill = FORMULA_FILL
+                ws.cell(row=row_idx, column=3).fill = FORMULA_FILL
 
-    year_cols = list(range(data_col_offset, data_col_offset + len(years)))
+
     check_start = data_start_row + len(items) + 1  # leave a blank row
 
     # === P&L checks ===
@@ -170,10 +192,12 @@ def _write_sheet_with_checks(ws, items, years: List[int], units_label: str,
         # Row references (1-indexed)
         r = lambda name: _item_row(name, items, data_start_row)
 
-        # Check 1: Gross Profit = Revenue + COGS
-        rev_r, cogs_r, gp_r = r("Revenue"), r("Cost of Goods Sold"), r("Gross Profit")
+        # Check 1: Gross Profit = Revenue (or Total Revenue) + COGS
+        # Use "Total Revenue" row when sub-lines are present, else "Revenue"
+        rev_name = "Total Revenue" if any(i[0] == "Total Revenue" for i in items) else "Revenue"
+        rev_r, cogs_r, gp_r = r(rev_name), r("Cost of Goods Sold"), r("Gross Profit")
         formula = f'=IF(ABS({{col}}{gp_r}-({{col}}{rev_r}+{{col}}{cogs_r}))<0.5,"✅ OK","❌ GP ≠ Rev+COGS")'
-        _add_check_row(ws, check_start, "Gross Profit = Revenue + COGS", formula, year_cols, data_col_offset - 1)
+        _add_check_row(ws, check_start, f"Gross Profit = {rev_name} + COGS", formula, year_cols, data_col_offset - 1)
 
         # Check 2: EBIT = GP + SGA + R&D + D&A + Amort + Other OpEx
         sga_r = r("SG&A")
@@ -306,15 +330,47 @@ def _write_sheet_with_checks(ws, items, years: List[int], units_label: str,
         _add_check_row(ws, check_start + 3, "Net Change = OCF + ICF + FCF", formula, year_cols, data_col_offset - 1)
 
 
-def generate_historical_template(years: List[int], currency: str, scale: str) -> bytes:
-    """Generate the 3-tab historical data Excel template with validation checks."""
+def generate_historical_template(
+    years: List[int],
+    currency: str,
+    scale: str,
+    revenue_lines: List[str] = None,
+) -> bytes:
+    """Generate the 3-tab historical data Excel template with validation checks.
+
+    revenue_lines: optional list of custom revenue stream names. When provided with
+    more than one entry (or a single entry that is not "Revenue"), the P&L sheet
+    contains one row per stream plus an auto-calculated "Total Revenue" formula row
+    instead of the single generic "Revenue" row.
+    """
     units_label = f"{currency} {scale}"
     wb = openpyxl.Workbook()
+
+    # Build dynamic P&L items list
+    use_sub_revenue = bool(
+        revenue_lines and
+        not (len(revenue_lines) == 1 and revenue_lines[0] == "Revenue")
+    )
+    if use_sub_revenue:
+        pnl_items = [(name, "(+)") for name in revenue_lines]
+        pnl_items.append(("Total Revenue", "(+)"))
+        # Append standard items excluding the generic "Revenue" row
+        pnl_items += [item for item in PNL_ITEMS if item[0] != "Revenue"]
+
+        # Pre-build SUM formula for Total Revenue (data_start_row = 2)
+        sub_start = 2
+        sub_end = 2 + len(revenue_lines) - 1
+        total_rev_formula = f"=SUM({{col}}{sub_start}:{{col}}{sub_end})"
+        formula_rows = {"Total Revenue": total_rev_formula}
+    else:
+        pnl_items = list(PNL_ITEMS)
+        formula_rows = None
 
     # Tab 1 — P&L
     ws_pnl = wb.active
     ws_pnl.title = "P&L"
-    _write_sheet_with_checks(ws_pnl, PNL_ITEMS, years, units_label, sheet_type="PNL")
+    _write_sheet_with_checks(ws_pnl, pnl_items, years, units_label, sheet_type="PNL",
+                              formula_rows=formula_rows)
 
     # Tab 2 — Balance Sheet
     ws_bs = wb.create_sheet("Balance Sheet")

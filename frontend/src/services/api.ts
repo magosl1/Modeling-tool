@@ -182,6 +182,16 @@ export const sharingApi = {
   getSharedWithMe: () => api.get('/projects/shared-with-me'),
 }
 
+// Revenue Streams — multi-line revenue configuration
+export const revenueStreamsApi = {
+  list: (projectId: string): Promise<AxiosResponse<Array<{ id: string | null; stream_name: string; display_order: number; projection_method: string }>>> =>
+    api.get(`/projects/${projectId}/revenue-streams`),
+  save: (projectId: string, streams: Array<{ stream_name: string; display_order: number; projection_method?: string }>): Promise<AxiosResponse<{ message: string; streams: string[] }>> =>
+    api.put(`/projects/${projectId}/revenue-streams`, streams),
+  detect: (projectId: string): Promise<AxiosResponse<{ detected_streams: Array<{ stream_name: string; is_standard: boolean; historical?: Record<string, string> }>; has_sub_lines: boolean; historical_preview?: Record<string, string> }>> =>
+    api.post(`/projects/${projectId}/revenue-streams/detect`),
+}
+
 // Block 6 — External Curves / Indices
 export const curvesApi = {
   get: (projectId: string) => api.get(`/projects/${projectId}/curves`),
