@@ -68,7 +68,11 @@ class Scenario(Base):
 class HistoricalData(Base):
     __tablename__ = "historical_data"
     __table_args__ = (
-        UniqueConstraint("project_id", "statement_type", "line_item", "year"),
+        # entity_id is included so multiple entities in the same project can each have
+        # the same line_item/year without violating uniqueness.
+        # NULL entity_id is allowed for legacy single-entity rows (NULL != NULL in PG).
+        UniqueConstraint("project_id", "entity_id", "statement_type", "line_item", "year",
+                         name="uq_historical_data_entity"),
         Index("ix_historical_data_project_id", "project_id"),
         Index("ix_historical_data_entity_id", "entity_id"),
     )
@@ -182,7 +186,9 @@ class NOLBalance(Base):
 class ProjectedFinancial(Base):
     __tablename__ = "projected_financials"
     __table_args__ = (
-        UniqueConstraint("project_id", "scenario_id", "statement_type", "line_item", "year"),
+        # entity_id included so multiple entities can store projections for the same year/line.
+        UniqueConstraint("project_id", "entity_id", "scenario_id", "statement_type", "line_item", "year",
+                         name="uq_projected_financials_entity"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

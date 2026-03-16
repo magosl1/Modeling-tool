@@ -11,6 +11,7 @@ from app.models.project import (
     ProjectedFinancial, NOLBalance
 )
 from app.api.deps import get_current_user, get_project_or_404
+from app.api.routes.entities import get_or_create_default_entity
 from app.services.projection_engine import ProjectionEngine
 import uuid
 from datetime import datetime, timezone
@@ -266,9 +267,17 @@ def run_projection(
             },
         )
 
+    # Ensure an entity exists for this project (backward compat for single-entity projects)
+    entity = get_or_create_default_entity(project, db)
+
     # Store projected financials — bulk insert is significantly faster than
     # individual db.add() calls for potentially hundreds of rows.
-    db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).delete()
+    # Scope deletes to this entity so parallel multi-entity runs don't clobber each other.
+    db.query(ProjectedFinancial).filter(
+        ProjectedFinancial.project_id == project_id,
+        ProjectedFinancial.entity_id == entity.id,
+        ProjectedFinancial.scenario_id == None,  # noqa: E711
+    ).delete()
     db.query(NOLBalance).filter(NOLBalance.project_id == project_id).delete()
 
     def _rows_for_statement(data: dict, stmt_type: str) -> list:
@@ -278,6 +287,7 @@ def run_projection(
                 rows.append({
                     "id": str(uuid.uuid4()),
                     "project_id": project_id,
+                    "entity_id": entity.id,
                     "statement_type": stmt_type,
                     "line_item": line_item,
                     "year": year,
