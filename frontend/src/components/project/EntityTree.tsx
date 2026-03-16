@@ -225,9 +225,9 @@ function AddEntityModal({
         </div>
 
         <div className="flex justify-end gap-2 mt-5">
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button
-            className="btn btn-primary"
+            className="btn-primary"
             disabled={isPending || !form.name.trim()}
             onClick={() => mutate(form)}
           >

@@ -196,7 +196,7 @@ export default function ProjectWorkspace() {
             {/* Consolidated view (Phase 3) */}
             <Route
               path="consolidated"
-              element={<ConsolidatedView projectId={id!} />}
+              element={<ConsolidatedView projectId={id!} entities={entities} />}
             />
 
             {/* Share panel */}

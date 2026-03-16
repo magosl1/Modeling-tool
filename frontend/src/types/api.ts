@@ -184,6 +184,57 @@ export interface RatiosResponse {
   years: number[]
 }
 
+// ── Consolidation (Phase 3) ───────────────────────────────
+
+/** line_item → { str(year) → str(value) } — string keys from backend JSON */
+export type ConsolidatedStatementData = Record<string, Record<string, string>>
+
+export interface ContributionEntry {
+  entity_id: string
+  entity_name: string
+  ownership_pct: number
+  consolidation_method: string
+  revenue: Record<string, string>
+  ebitda: Record<string, string>
+  net_income: Record<string, string>
+}
+
+export interface ConsolidationMetadata {
+  entity_count: number
+  entities_with_data: number
+  has_minority_interest: boolean
+  has_eliminations: boolean
+}
+
+export interface ConsolidatedResponse {
+  PNL: ConsolidatedStatementData
+  BS: ConsolidatedStatementData
+  CF: ConsolidatedStatementData
+  contribution: ContributionEntry[]
+  metadata: ConsolidationMetadata
+}
+
+export interface IntercompanyElimination {
+  id: string
+  from_entity_id: string
+  from_entity_name: string | null
+  to_entity_id: string
+  to_entity_name: string | null
+  transaction_type: 'revenue_cost' | 'management_fee' | 'loan' | 'dividend' | 'asset_transfer'
+  description: string
+  amount_by_year: Record<string, number>
+  created_at: string
+  updated_at: string
+}
+
+export interface EliminationCreate {
+  from_entity_id: string
+  to_entity_id: string
+  transaction_type: IntercompanyElimination['transaction_type']
+  description: string
+  amount_by_year: Record<string, number>
+}
+
 // ── Auth ─────────────────────────────────────────────────
 
 export interface AuthTokens {

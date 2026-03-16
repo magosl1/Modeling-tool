@@ -82,11 +82,11 @@ function EntityOverview({ entity, onUpdate }: { entity: Entity; onUpdate: () => 
         <div className="flex gap-2">
           {editing ? (
             <>
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="btn btn-primary btn-sm" onClick={() => mutate()} disabled={isPending}>Save</button>
+              <button className="btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+              <button className="btn-primary" onClick={() => mutate()} disabled={isPending}>Save</button>
             </>
           ) : (
-            <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>Edit</button>
+            <button className="btn-secondary" onClick={() => setEditing(true)}>Edit</button>
           )}
         </div>
       </div>
