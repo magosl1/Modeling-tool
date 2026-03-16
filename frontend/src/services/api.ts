@@ -7,6 +7,7 @@ import type {
   ValuationInputCreate, ValuationResult,
   RatiosResponse,
   LoginRequest, RegisterRequest, AuthTokens,
+  ConsolidatedResponse, IntercompanyElimination, EliminationCreate,
 } from '../types/api'
 
 const BASE_URL = '/api/v1'
@@ -142,9 +143,10 @@ export const ratiosApi = {
 export const scenariosApi = {
   list: (projectId: string) => api.get(`/projects/${projectId}/scenarios`),
   create: (projectId: string, data: any) => api.post(`/projects/${projectId}/scenarios`, data),
-  activate: (projectId: string, scenarioId: string) => api.post(`/projects/${projectId}/scenarios/${scenarioId}/activate`),
-  copy: (projectId: string, scenarioId: string) => api.post(`/projects/${projectId}/scenarios/${scenarioId}/copy`),
   delete: (projectId: string, scenarioId: string) => api.delete(`/projects/${projectId}/scenarios/${scenarioId}`),
+  run: (projectId: string, scenarioId: string) => api.post(`/projects/${projectId}/scenarios/${scenarioId}/run`),
+  compare: (projectId: string, scenarioIds: string[]) =>
+    api.get(`/projects/${projectId}/scenarios/compare`, { params: { ids: scenarioIds.join(',') } }),
 }
 
 // Block 2 — Debt Schedule (Revolver + Term Loans)
@@ -190,6 +192,22 @@ export const revenueStreamsApi = {
     api.put(`/projects/${projectId}/revenue-streams`, streams),
   detect: (projectId: string): Promise<AxiosResponse<{ detected_streams: Array<{ stream_name: string; is_standard: boolean; historical?: Record<string, string> }>; has_sub_lines: boolean; historical_preview?: Record<string, string> }>> =>
     api.post(`/projects/${projectId}/revenue-streams/detect`),
+}
+
+// Phase 3 — Consolidated View + Intercompany Eliminations
+export const consolidatedApi = {
+  getProjections: (projectId: string, scenarioId?: string): Promise<AxiosResponse<ConsolidatedResponse>> =>
+    api.get(`/projects/${projectId}/consolidated/projections`, { params: scenarioId ? { scenario_id: scenarioId } : {} }),
+  getHistorical: (projectId: string): Promise<AxiosResponse<ConsolidatedResponse>> =>
+    api.get(`/projects/${projectId}/consolidated/historical`),
+  listEliminations: (projectId: string): Promise<AxiosResponse<IntercompanyElimination[]>> =>
+    api.get(`/projects/${projectId}/eliminations`),
+  createElimination: (projectId: string, data: EliminationCreate): Promise<AxiosResponse<{ id: string; message: string }>> =>
+    api.post(`/projects/${projectId}/eliminations`, data),
+  updateElimination: (projectId: string, elimId: string, data: Partial<EliminationCreate>): Promise<AxiosResponse<{ id: string; message: string }>> =>
+    api.put(`/projects/${projectId}/eliminations/${elimId}`, data),
+  deleteElimination: (projectId: string, elimId: string): Promise<AxiosResponse<void>> =>
+    api.delete(`/projects/${projectId}/eliminations/${elimId}`),
 }
 
 // Block 6 — External Curves / Indices

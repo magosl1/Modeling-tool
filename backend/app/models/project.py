@@ -62,13 +62,27 @@ class Scenario(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_base: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Display colour (hex, e.g. "#4472C4")
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True, default="#4472C4")
+    # Probability weight for probability-weighted valuation (0-1)
+    probability: Mapped[float | None] = mapped_column(nullable=True)
+    # Entity-level assumption overrides stored as JSON:
+    # {
+    #   "all": { "revenue": {"growth_rate": [0.05, 0.04, 0.03]} },
+    #   "<entity_id>": { "revenue": {"growth_rate": [0.10, 0.08, 0.06]} }
+    # }
+    overrides: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class HistoricalData(Base):
     __tablename__ = "historical_data"
     __table_args__ = (
-        UniqueConstraint("project_id", "statement_type", "line_item", "year"),
+        # entity_id is included so multiple entities in the same project can each have
+        # the same line_item/year without violating uniqueness.
+        # NULL entity_id is allowed for legacy single-entity rows (NULL != NULL in PG).
+        UniqueConstraint("project_id", "entity_id", "statement_type", "line_item", "year",
+                         name="uq_historical_data_entity"),
         Index("ix_historical_data_project_id", "project_id"),
         Index("ix_historical_data_entity_id", "entity_id"),
     )
@@ -182,7 +196,9 @@ class NOLBalance(Base):
 class ProjectedFinancial(Base):
     __tablename__ = "projected_financials"
     __table_args__ = (
-        UniqueConstraint("project_id", "scenario_id", "statement_type", "line_item", "year"),
+        # entity_id included so multiple entities can store projections for the same year/line.
+        UniqueConstraint("project_id", "entity_id", "scenario_id", "statement_type", "line_item", "year",
+                         name="uq_projected_financials_entity"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

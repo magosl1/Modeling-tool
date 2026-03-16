@@ -40,7 +40,8 @@ def _load_assumptions_for_mc(project_id: str, scenario_id: Optional[str], db: Se
     from app.api.routes.projections import _transform_assumptions
     rows = db.query(ProjectionAssumption).filter(
         ProjectionAssumption.project_id == project_id,
-        ProjectionAssumption.scenario_id == scenario_id,
+        ProjectionAssumption.scenario_id.is_(None) if scenario_id is None
+        else ProjectionAssumption.scenario_id == scenario_id,
     ).all()
     raw: Dict = {}
     for a in rows:
