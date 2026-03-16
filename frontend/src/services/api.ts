@@ -1,6 +1,7 @@
 import axios, { type AxiosResponse } from 'axios'
 import type {
   Project, ProjectCreate, ProjectUpdate,
+  Entity, EntityCreate, EntityUpdate,
   HistoricalResponse, AllAssumptions, AssumptionItem, ModuleStatus,
   ProjectionsResponse, RunProjectionResponse,
   ValuationInputCreate, ValuationResult,
@@ -58,11 +59,33 @@ export const projectsApi = {
   delete: (id: string): Promise<AxiosResponse<void>> => api.delete(`/projects/${id}`),
 }
 
+// Entities (Phase 0 — Universal Platform)
+export const entitiesApi = {
+  list: (projectId: string): Promise<AxiosResponse<Entity[]>> =>
+    api.get(`/projects/${projectId}/entities`),
+  create: (projectId: string, data: EntityCreate): Promise<AxiosResponse<Entity>> =>
+    api.post(`/projects/${projectId}/entities`, data),
+  get: (entityId: string): Promise<AxiosResponse<Entity>> =>
+    api.get(`/entities/${entityId}`),
+  update: (entityId: string, data: EntityUpdate): Promise<AxiosResponse<Entity>> =>
+    api.put(`/entities/${entityId}`, data),
+  delete: (entityId: string): Promise<AxiosResponse<void>> =>
+    api.delete(`/entities/${entityId}`),
+  clone: (entityId: string, data: { new_name: string; overrides?: Record<string, unknown> }): Promise<AxiosResponse<Entity>> =>
+    api.post(`/entities/${entityId}/clone`, data),
+  bulkCreate: (projectId: string, data: { template: EntityCreate; count: number; naming_pattern?: string }): Promise<AxiosResponse<Entity[]>> =>
+    api.post(`/projects/${projectId}/entities/bulk-create`, data),
+  getHistorical: (entityId: string): Promise<AxiosResponse<HistoricalResponse>> =>
+    api.get(`/entities/${entityId}/historical`),
+  getProjections: (entityId: string, scenarioId?: string): Promise<AxiosResponse<Record<string, Record<string, Record<string, string>>>>> =>
+    api.get(`/entities/${entityId}/projections`, { params: scenarioId ? { scenario_id: scenarioId } : {} }),
+}
+
 // Historical
 export const historicalApi = {
   downloadTemplate: (projectId: string): Promise<AxiosResponse<Blob>> =>
     api.get(`/projects/${projectId}/template/historical`, { responseType: 'blob' }),
-  upload: (projectId: string, file: File): Promise<AxiosResponse<{ message: string; years: number[] }>> => {
+  upload: (projectId: string, file: File): Promise<AxiosResponse<{ message: string; years: number[]; detected_revenue_streams: string[] }>> => {
     const form = new FormData()
     form.append('file', file)
     return api.post(`/projects/${projectId}/upload/historical`, form)
@@ -157,6 +180,16 @@ export const sharingApi = {
   revoke: (projectId: string, userId: string) =>
     api.delete(`/projects/${projectId}/share/${userId}`),
   getSharedWithMe: () => api.get('/projects/shared-with-me'),
+}
+
+// Revenue Streams — multi-line revenue configuration
+export const revenueStreamsApi = {
+  list: (projectId: string): Promise<AxiosResponse<Array<{ id: string | null; stream_name: string; display_order: number; projection_method: string }>>> =>
+    api.get(`/projects/${projectId}/revenue-streams`),
+  save: (projectId: string, streams: Array<{ stream_name: string; display_order: number; projection_method?: string }>): Promise<AxiosResponse<{ message: string; streams: string[] }>> =>
+    api.put(`/projects/${projectId}/revenue-streams`, streams),
+  detect: (projectId: string): Promise<AxiosResponse<{ detected_streams: Array<{ stream_name: string; is_standard: boolean; historical?: Record<string, string> }>; has_sub_lines: boolean; historical_preview?: Record<string, string> }>> =>
+    api.post(`/projects/${projectId}/revenue-streams/detect`),
 }
 
 // Block 6 — External Curves / Indices

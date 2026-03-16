@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { historicalApi } from '../../services/api'
 import toast from 'react-hot-toast'
 import type { Project, HistoricalResponse } from '../../types/api'
+import RevenueStreamsSetup from './RevenueStreamsSetup'
 
 interface ValidationError {
   tab: string
@@ -17,6 +18,7 @@ interface Props { projectId: string; project: Project }
 export default function UploadHistorical({ projectId, project }: Props) {
   const qc = useQueryClient()
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
+  const [detectedStreams, setDetectedStreams] = useState<string[]>([])
 
   const { data: historical } = useQuery<HistoricalResponse>({
     queryKey: ['historical', projectId],
@@ -25,10 +27,13 @@ export default function UploadHistorical({ projectId, project }: Props) {
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => historicalApi.upload(projectId, file),
-    onSuccess: () => {
+    onSuccess: (res) => {
       setValidationErrors([])
+      const detected: string[] = res.data?.detected_revenue_streams ?? []
+      setDetectedStreams(detected)
       qc.invalidateQueries({ queryKey: ['historical', projectId] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
+      qc.invalidateQueries({ queryKey: ['revenue-streams', projectId] })
       toast.success('Historical data uploaded and validated!')
     },
     onError: (err: any) => {
@@ -80,21 +85,25 @@ export default function UploadHistorical({ projectId, project }: Props) {
         </p>
       </div>
 
-      {/* Step 1: Download Template */}
+      {/* Step 1: Define Revenue Lines */}
+      <RevenueStreamsSetup projectId={projectId} />
+
+      {/* Step 2: Download Template */}
       <div className="card">
-        <h3 className="font-medium text-gray-900 mb-3">Step 1 — Download Template</h3>
+        <h3 className="font-medium text-gray-900 mb-3">Step 2 — Download Template</h3>
         <p className="text-sm text-gray-500 mb-4">
           3-tab Excel file (P&amp;L, Balance Sheet, Cash Flow) pre-configured for{' '}
           <strong>{project.currency} {project.scale}</strong>.
+          The P&amp;L tab will reflect your revenue stream setup above.
         </p>
         <button onClick={downloadTemplate} className="btn-secondary">
           ⬇ Download Historical Template (.xlsx)
         </button>
       </div>
 
-      {/* Step 2: Upload */}
+      {/* Step 3: Upload */}
       <div className="card">
-        <h3 className="font-medium text-gray-900 mb-3">Step 2 — Upload Completed File</h3>
+        <h3 className="font-medium text-gray-900 mb-3">Step 3 — Upload Completed File</h3>
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
@@ -131,6 +140,25 @@ export default function UploadHistorical({ projectId, project }: Props) {
             ))}
           </div>
           <p className="text-red-600 text-sm mt-3">Fix the errors above and re-upload.</p>
+        </div>
+      )}
+
+      {/* Detected Revenue Streams (after upload with sub-lines) */}
+      {detectedStreams.length > 0 && (
+        <div className="card border-blue-200 bg-blue-50">
+          <h3 className="font-medium text-blue-800 mb-2">
+            Revenue Streams Auto-Detected
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {detectedStreams.map(s => (
+              <span key={s} className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium">
+                {s}
+              </span>
+            ))}
+          </div>
+          <p className="text-blue-600 text-sm mt-2">
+            Each stream will have its own projection method in the Assumptions → Revenue module.
+          </p>
         </div>
       )}
 

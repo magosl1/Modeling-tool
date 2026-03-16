@@ -14,6 +14,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.post("", response_model=ProjectOut, status_code=201)
 def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    base_currency = data.base_currency or data.currency
     project = Project(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
@@ -22,6 +23,8 @@ def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_u
         scale=data.scale,
         fiscal_year_end=data.fiscal_year_end,
         projection_years=data.projection_years,
+        project_type=data.project_type,
+        base_currency=base_currency,
         status="draft",
     )
     db.add(project)
@@ -48,7 +51,7 @@ def update_project(project_id: str, data: ProjectUpdate, db: Session = Depends(g
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == current_user.id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    allowed_fields = {"name", "currency", "scale", "fiscal_year_end", "projection_years"}
+    allowed_fields = {"name", "currency", "scale", "fiscal_year_end", "projection_years", "project_type", "base_currency"}
     for field, value in data.model_dump(exclude_none=True).items():
         if field not in allowed_fields:
             continue
