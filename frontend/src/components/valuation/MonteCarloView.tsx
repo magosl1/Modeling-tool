@@ -160,7 +160,7 @@ export default function MonteCarloView({ projectId, scenarioId }: Props) {
               <div key={stat.label} className="card text-center py-3">
                 <div className="text-xs text-gray-500 mb-1">{stat.label}</div>
                 <div className={`text-sm font-mono ${stat.color}`}>
-                  {latest.p50 != null ? latest[stat.label.toLowerCase().replace(' (median)','')].toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
+                  {stat.value != null ? stat.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
                 </div>
               </div>
             ))}

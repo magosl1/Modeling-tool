@@ -239,10 +239,10 @@ def consolidate(
                     )
 
             elif elim.transaction_type == "dividend":
-                # Remove dividend income from parent P&L
-                if "Interest Income" in cons_pnl:
-                    cons_pnl["Interest Income"][year] = (
-                        cons_pnl["Interest Income"].get(year, Decimal(0)) - amt
+                # Remove dividend income from parent P&L (booked under non-operating income)
+                if "Other Non-Operating Income / (Expense)" in cons_pnl:
+                    cons_pnl["Other Non-Operating Income / (Expense)"][year] = (
+                        cons_pnl["Other Non-Operating Income / (Expense)"].get(year, Decimal(0)) - amt
                     )
 
     return {
