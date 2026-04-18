@@ -1,20 +1,26 @@
 """Scenario management routes — create, list, delete, run, compare."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
-from typing import List, Optional
-from pydantic import BaseModel
-from decimal import Decimal
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import List, Optional
 
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import (
-    Project, Scenario, ProjectionAssumption, AssumptionParam,
-    ProjectedFinancial, NOLBalance, HistoricalData
-)
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_project_or_404
+from app.db.base import get_db
+from app.models.project import (
+    AssumptionParam,
+    HistoricalData,
+    NOLBalance,
+    Project,
+    ProjectedFinancial,
+    ProjectionAssumption,
+    Scenario,
+)
+from app.models.user import User
 from app.services.projection_engine import ProjectionEngine
 
 router = APIRouter(prefix="/projects", tags=["scenarios"])

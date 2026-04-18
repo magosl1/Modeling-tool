@@ -1,10 +1,12 @@
+import uuid
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import ExternalCurveValue
+
 from app.api.deps import get_current_user, get_project_or_404
-import uuid
+from app.db.base import get_db
+from app.models.project import ExternalCurveValue
+from app.models.user import User
 
 router = APIRouter(prefix="/projects", tags=["curves"])
 

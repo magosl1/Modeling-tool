@@ -24,9 +24,10 @@ Runs in strict dependency order:
 20.  Non-Operating Assets, Goodwill
 21.  Balance Sheet close → validation
 """
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Dict, List, Optional
+
 from app.services.utils import ZERO, d
 
 TOLERANCE = Decimal("0.5")

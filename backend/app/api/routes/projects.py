@@ -1,13 +1,15 @@
+import uuid
+from datetime import datetime, timezone
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
+
 from app.api.deps import get_current_user
-from datetime import datetime, timezone
-import uuid
+from app.db.base import get_db
+from app.models.project import Project
+from app.models.user import User
+from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 

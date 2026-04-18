@@ -156,16 +156,19 @@ export default function LiveProjectionsView({ projectId, module }: Props) {
                                 <RatiosView projectId={projectId} />
                             </div>
                         ) : (
-                            TABS.filter(t => t.key === activeTab).map(tab => (
-                                <FinancialTable
-                                    key={tab.key}
-                                    title={tab.label}
-                                    items={tab.items as string[]}
-                                    data={projections?.[tab.key] || {}}
-                                    years={years}
-                                    fmt={fmt}
-                                />
-                            ))
+                            TABS.filter(t => t.key === activeTab).map(tab => {
+                                const dataKey = tab.key as 'PNL' | 'BS' | 'CF'
+                                return (
+                                    <FinancialTable
+                                        key={tab.key}
+                                        title={tab.label}
+                                        items={tab.items as string[]}
+                                        data={projections?.[dataKey] || {}}
+                                        years={years}
+                                        fmt={fmt}
+                                    />
+                                )
+                            })
                         )}
                     </div>
                 </div>

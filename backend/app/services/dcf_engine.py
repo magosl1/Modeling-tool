@@ -5,9 +5,10 @@ FCFF = EBIT × (1 − Tax Rate) + D&A + Amortization − ΔWC − Capex
 Terminal Value: Gordon Growth Model or Exit Multiple
 Sensitivity: 5×5 matrix WACC × Terminal Growth Rate
 """
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
+
 from app.services.utils import ZERO, d
 
 

@@ -5,10 +5,10 @@ errors while filling in the data, before uploading.
 """
 from io import BytesIO
 from typing import List
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
 
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 PNL_ITEMS = [
     ("Revenue", "(+)"),

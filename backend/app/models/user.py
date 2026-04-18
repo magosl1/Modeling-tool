@@ -1,7 +1,10 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Enum as SAEnum
+
+from sqlalchemy import DateTime, String
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.base import Base
 
 

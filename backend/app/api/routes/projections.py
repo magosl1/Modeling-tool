@@ -1,20 +1,26 @@
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import insert
 from sqlalchemy.orm import Session, joinedload
-from typing import Dict, List
-from decimal import Decimal
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import (
-    Project, HistoricalData, ProjectionAssumption, AssumptionParam,
-    ProjectedFinancial, NOLBalance
-)
+
 from app.api.deps import get_current_user, get_project_or_404
 from app.api.routes.entities import get_or_create_default_entity
+from app.db.base import get_db
+from app.models.project import (
+    AssumptionParam,
+    HistoricalData,
+    NOLBalance,
+    Project,
+    ProjectedFinancial,
+    ProjectionAssumption,
+)
+from app.models.user import User
 from app.services.projection_engine import ProjectionEngine
-import uuid
-from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["projections"])
 
@@ -387,8 +393,9 @@ def export_projections(
     proj_years = sorted(proj_years)
     all_years = hist_years + proj_years
 
-    import openpyxl
     from io import BytesIO
+
+    import openpyxl
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -418,7 +425,7 @@ def export_projections(
         for i in range(len(all_years)):
             ws.column_dimensions[get_column_letter(2 + i)].width = 14
 
-    from app.services.template_generator import PNL_ITEMS, CF_ITEMS, BS_ITEMS
+    from app.services.template_generator import BS_ITEMS, CF_ITEMS, PNL_ITEMS
 
     ws_pnl = wb.active
     ws_pnl.title = "P&L"

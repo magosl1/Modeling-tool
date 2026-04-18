@@ -6,9 +6,9 @@ Revenue flexibility: accepts either a single "Revenue" line OR multiple
 sub-lines (stored with bucket="Revenue") summing to a "Total Revenue" row.
 The validator uses whichever is present for formula cross-checks.
 """
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional
-from dataclasses import dataclass
 
 TOLERANCE = Decimal("0.5")
 
@@ -249,8 +249,9 @@ def parse_historical_excel(file_bytes: bytes):
 
     Returns (result_dict, years, detected_revenue_sub_lines).
     """
-    import openpyxl
     from io import BytesIO
+
+    import openpyxl
 
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
     result = {"PNL": {}, "BS": {}, "CF": {}}

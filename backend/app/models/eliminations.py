@@ -14,7 +14,7 @@ The ConsolidationEngine applies them automatically during consolidation.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base

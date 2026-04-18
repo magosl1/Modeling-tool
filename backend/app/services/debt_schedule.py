@@ -6,8 +6,8 @@ Builds a year-by-year debt schedule with:
 - Fixed-tranche term loans: bullet or straight-line amortization
 - Iterative convergence (max 10 iterations) for interest ↔ cash circularity
 """
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, List, Optional, Any
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any, Dict, List, Optional
 
 ZERO = Decimal("0")
 TWO = Decimal("2")

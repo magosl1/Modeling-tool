@@ -15,16 +15,16 @@ DEL  /projects/{id}/eliminations/{eid}         — delete elimination record
 """
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
 
+from app.api.deps import get_current_user, get_project_or_404
 from app.db.base import get_db
-from app.models.user import User
 from app.models.eliminations import IntercompanyTransaction
 from app.models.entity import Entity
-from app.api.deps import get_current_user, get_project_or_404
+from app.models.user import User
 from app.services.consolidation_engine import consolidate
 
 router = APIRouter(prefix="/projects", tags=["consolidated"])

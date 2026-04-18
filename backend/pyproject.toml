@@ -1,0 +1,21 @@
+# Project-local tool config. Runtime deps live in requirements.txt; this file
+# only holds tool settings so they don't sprawl across multiple dotfiles.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions", "migrations_legacy"]
+
+[tool.ruff.lint]
+# Start minimal: pyflakes (F) + import sorting (I). Expand later once the
+# existing codebase is clean.
+select = ["F", "I"]
+ignore = [
+    "F401",  # Unused imports — used heavily for side-effect model imports
+    "F403",  # `from module import *` in some routes
+]
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy string-based forward references (Mapped["Entity"]) are resolved
+# at runtime; ruff's static F821 is a false positive here.
+"app/models/*.py" = ["F821"]

@@ -1,20 +1,33 @@
 """Initialize database tables."""
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 
+from alembic import command
 from app.db.base import Base, engine
-from app.models.user import User
-from app.models.entity import Entity  # noqa: F401 — registers table with metadata
 from app.models.eliminations import IntercompanyTransaction  # noqa: F401
+from app.models.entity import Entity  # noqa: F401 — registers table with metadata
 from app.models.project import (
-    Project, Scenario, HistoricalData, RevenueStream, RevenueStreamParam,
-    ProjectionAssumption, AssumptionParam, NOLBalance,
-    ProjectedFinancial, ValuationInput, ValuationOutput, UploadedFile,
-    RevolverConfig, DebtTranche, FXRate, SimulationResult, ProjectShare,
+    AssumptionParam,
+    DebtTranche,
     ExternalCurveValue,
+    FXRate,
+    HistoricalData,
+    NOLBalance,
+    Project,
+    ProjectedFinancial,
+    ProjectionAssumption,
+    ProjectShare,
+    RevenueStream,
+    RevenueStreamParam,
+    RevolverConfig,
+    Scenario,
+    SimulationResult,
+    UploadedFile,
+    ValuationInput,
+    ValuationOutput,
 )
+from app.models.user import User
 
 
 def _alembic_config() -> Config:

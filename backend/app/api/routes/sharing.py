@@ -1,15 +1,16 @@
 """Collaboration / Sharing routes — Block 5."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from pydantic import BaseModel
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
+from typing import List, Optional
 
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project, ProjectShare
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_project_or_404
+from app.db.base import get_db
+from app.models.project import Project, ProjectShare
+from app.models.user import User
 
 router = APIRouter(tags=["sharing"])
 

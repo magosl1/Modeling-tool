@@ -1,8 +1,10 @@
 """Entity model — the fundamental modeling unit for the universal platform."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Float, Boolean, ForeignKey, UniqueConstraint
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
 
 

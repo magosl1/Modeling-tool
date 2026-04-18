@@ -1,15 +1,17 @@
 """Module-specific template generation and upload routes."""
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import Response
-from sqlalchemy.orm import Session
-from typing import List
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project, ProjectionAssumption
-from app.api.deps import get_current_user, get_project_or_404
-from app.services.template_generator import generate_module_template
 import uuid
 from datetime import datetime, timezone
+from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_project_or_404
+from app.db.base import get_db
+from app.models.project import Project, ProjectionAssumption
+from app.models.user import User
+from app.services.template_generator import generate_module_template
 
 router = APIRouter(prefix="/projects", tags=["templates"])
 

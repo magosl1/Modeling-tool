@@ -172,6 +172,10 @@ export interface ValuationResult {
   pv_terminal_value: string
   method_used: 'gordon_growth' | 'exit_multiple'
   fcff_by_year?: Record<string, string>
+  fcff_build_up?: Record<string, Record<string, string>>
+  normalized_terminal_year?: number | null
+  terminal_fcff_build_up?: Record<string, string>
+  implied_multiples?: Record<string, Record<string, string | null>>
   sensitivity_table?: Record<string, Record<string, string>>
 }
 

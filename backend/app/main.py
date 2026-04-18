@@ -3,7 +3,27 @@ import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, scenarios, debt, fx, simulation, sharing, curves, metadata, entities, revenue_streams, consolidated
+
+from app.api.routes import (
+    assumptions,
+    auth,
+    consolidated,
+    curves,
+    debt,
+    entities,
+    fx,
+    historical,
+    metadata,
+    projections,
+    projects,
+    ratios,
+    revenue_streams,
+    scenarios,
+    sharing,
+    simulation,
+    templates,
+    valuation,
+)
 from app.core.config import settings
 
 logger = logging.getLogger("uvicorn.access")

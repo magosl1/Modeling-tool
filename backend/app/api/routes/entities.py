@@ -1,16 +1,23 @@
 """Entity CRUD routes — Phase 0 of the universal modeling platform."""
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
 
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project, HistoricalData, ProjectionAssumption, ProjectedFinancial
-from app.models.entity import Entity
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_project_or_404
-from app.schemas.entity import EntityCreate, EntityUpdate, EntityOut, BulkCreateRequest, CloneEntityRequest
+from app.db.base import get_db
+from app.models.entity import Entity
+from app.models.project import HistoricalData, Project, ProjectedFinancial, ProjectionAssumption
+from app.models.user import User
+from app.schemas.entity import (
+    BulkCreateRequest,
+    CloneEntityRequest,
+    EntityCreate,
+    EntityOut,
+    EntityUpdate,
+)
 
 router = APIRouter(tags=["entities"])
 

@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
-from typing import List, Dict
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import ProjectionAssumption, AssumptionParam, HistoricalData
-from app.api.deps import get_current_user, get_project_or_404
 import uuid
 from datetime import datetime, timezone
+from typing import Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session, joinedload
+
+from app.api.deps import get_current_user, get_project_or_404
+from app.db.base import get_db
+from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption
+from app.models.user import User
 
 router = APIRouter(prefix="/projects", tags=["assumptions"])
 

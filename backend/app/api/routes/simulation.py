@@ -1,20 +1,24 @@
 """Monte Carlo simulation routes — Block 4."""
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
-from decimal import Decimal
 import uuid
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import (
-    SimulationResult, HistoricalData, ProjectionAssumption, AssumptionParam,
-    ValuationInput
-)
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_user, get_project_or_404
-from app.services.monte_carlo import run_monte_carlo
 from app.api.routes.projections import _load_historical, _transform_assumptions
+from app.db.base import get_db
+from app.models.project import (
+    AssumptionParam,
+    HistoricalData,
+    ProjectionAssumption,
+    SimulationResult,
+    ValuationInput,
+)
+from app.models.user import User
+from app.services.monte_carlo import run_monte_carlo
 
 router = APIRouter(prefix="/projects", tags=["simulation"])
 
@@ -37,7 +41,6 @@ class MonteCarloRequest(BaseModel):
 
 
 def _load_assumptions_for_mc(project_id: str, scenario_id: Optional[str], db: Session) -> Dict:
-    from app.api.routes.projections import _transform_assumptions
     rows = db.query(ProjectionAssumption).filter(
         ProjectionAssumption.project_id == project_id,
         ProjectionAssumption.scenario_id.is_(None) if scenario_id is None
