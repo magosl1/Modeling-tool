@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectionsApi, scenariosApi, projectsApi, assumptionsApi } from '../../services/api'
-import type { ProjectionsResponse, StatementData } from '../../types/api'
+import type { ProjectionsResponse } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 import RatiosView from './RatiosView'
 import ScenarioManager from '../scenarios/ScenarioManager'
@@ -53,13 +53,6 @@ function fmtVal(raw: string | number | undefined, fmt: (v: any) => string): { te
     return { text: `(${pos})`, negative: true }
   }
   return { text: fmt(num), negative: false }
-}
-
-function pct(a: string | undefined, b: string | undefined): string {
-  const na = parseFloat(String(a ?? '0'))
-  const nb = parseFloat(String(b ?? '0'))
-  if (!nb || isNaN(na) || isNaN(nb)) return '—'
-  return ((na / nb) * 100).toFixed(1) + '%'
 }
 
 function growth(curr: string | undefined, prev: string | undefined): string {

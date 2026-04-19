@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_owner
 from app.db.base import get_db
 from app.models.project import Project, ProjectShare
 from app.models.user import User
@@ -37,7 +37,7 @@ def share_project(
     current_user: User = Depends(get_current_user),
 ):
     """Invite a registered user to access this project."""
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_owner(project_id, current_user, db)
 
     if body.role not in ("viewer", "editor"):
         raise HTTPException(400, "Role must be 'viewer' or 'editor'")
@@ -75,7 +75,7 @@ def list_shares(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_owner(project_id, current_user, db)
     shares = db.query(ProjectShare).filter(ProjectShare.project_id == project_id).all()
     result = []
     for s in shares:
@@ -98,7 +98,7 @@ def revoke_share(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_owner(project_id, current_user, db)
     share = db.query(ProjectShare).filter(
         ProjectShare.project_id == project_id,
         ProjectShare.shared_with_user_id == user_id,

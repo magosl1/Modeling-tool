@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.api.routes.revenue_streams import _sync_revenue_assumptions
 from app.db.base import get_db
 from app.models.project import HistoricalData, Project, RevenueStream
@@ -65,7 +65,7 @@ async def upload_historical_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     content = await file.read()
 
     if len(content) > MAX_UPLOAD_SIZE:

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
 from app.models.project import (
     AssumptionParam,
@@ -170,7 +170,7 @@ def create_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
 
     # Ensure base scenario exists
     base = _ensure_base_scenario(project_id, db)
@@ -204,7 +204,7 @@ def delete_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     scenario = _get_scenario_or_404(scenario_id, project_id, db)
     if scenario.is_base:
         raise HTTPException(400, "Cannot delete the base scenario")
@@ -221,7 +221,7 @@ def run_scenario(
     current_user: User = Depends(get_current_user),
 ):
     """Run the projection engine for a specific scenario."""
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     scenario = _get_scenario_or_404(scenario_id, project_id, db)
 
     pnl, bs, cf, hist_years = _load_historical(project_id, db)

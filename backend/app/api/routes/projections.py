@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import insert
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.api.routes.entities import get_or_create_default_entity
 from app.db.base import get_db
 from app.models.project import (
@@ -252,7 +252,7 @@ def run_projection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
 
     if not hist_years:

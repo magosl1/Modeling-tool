@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
 from app.models.entity import Entity
 from app.models.project import HistoricalData, Project, ProjectedFinancial, ProjectionAssumption
@@ -104,7 +104,7 @@ def create_entity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
 
     if payload.parent_entity_id:
         parent = db.query(Entity).filter(
@@ -293,7 +293,7 @@ def bulk_create_entities(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     created = []
 
     for i in range(1, payload.count + 1):

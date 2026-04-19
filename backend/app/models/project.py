@@ -97,7 +97,7 @@ class HistoricalData(Base):
         UniqueConstraint("project_id", "entity_id", "statement_type", "line_item", "year",
                          name="uq_historical_data_entity"),
         Index("ix_historical_data_project_id", "project_id"),
-        Index("ix_historical_data_entity_id", "entity_id"),
+        # entity_id index is defined inline via `index=True` on the column.
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -150,7 +150,7 @@ class ProjectionAssumption(Base):
     __tablename__ = "projection_assumptions"
     __table_args__ = (
         Index("ix_projection_assumptions_project_id", "project_id"),
-        Index("ix_projection_assumptions_entity_id", "entity_id"),
+        # entity_id index is defined inline via `index=True` on the column.
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

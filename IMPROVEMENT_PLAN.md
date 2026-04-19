@@ -2,7 +2,7 @@
 
 > Documento vivo. Se actualiza a medida que se completan tareas o se descubren nuevas. Principio guía: **mantenerlo lean** — añadir solo lo necesario, borrar lo que ya no aplique, evitar abstracciones prematuras.
 
-Última actualización: 2026-04-18
+Última actualización: 2026-04-19
 
 ---
 
@@ -35,11 +35,11 @@
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
-| 2.1 | Ruff + mypy + pre-commit | ⏳ pendiente | Backend |
-| 2.2 | ESLint + Prettier + tsconfig strict | ⏳ pendiente | Activar `noUnusedLocals` |
-| 2.3 | RBAC enforcement en `project_shares` | ⏳ pendiente | viewer/editor |
-| 2.4 | Exception handlers globales + structlog | ⏳ pendiente | Error schema unificado |
-| 2.5 | Pinnear deps con `>=` y auditar usadas | ⏳ pendiente | yfinance, reportlab, fuzzywuzzy |
+| 2.1 | Ruff + pre-commit (mypy diferido) | ✅ | `.pre-commit-config.yaml` con ruff + hooks estándar |
+| 2.2 | ESLint + Prettier + tsconfig strict | ✅ | `noUnusedLocals/Parameters` activos, ESLint mínimo (recommended + react-hooks) |
+| 2.3 | RBAC enforcement en `project_shares` | ✅ | 3 helpers (`get_project_or_404` / `_for_write` / `_for_owner`); 13 routes con write permission; sharing.py owner-only; 4 tests (`test_rbac.py`) |
+| 2.4 | Exception handlers globales + structlog | ✅ | `app/core/{logging,errors}.py`, schema uniforme `{error: {code, message, request_id, details?}}`, X-Request-ID middleware, 4 tests |
+| 2.5 | Auditar y limpiar dependencias | ✅ | Eliminadas 8 deps no usadas (`pandas`, `httpx` movido a dev, `yfinance`, `fuzzywuzzy`, `python-Levenshtein`, `numpy`, `numpy-financial`, `reportlab`); todas pinneadas con `==`; añadido `structlog` |
 
 ### Fase 3 — Refactor del core (P1/P2)
 
@@ -87,3 +87,8 @@
 - 2026-04-18 · **1.5** Vitest configurado (`vite.config.ts#test`, `package.json#scripts.test`). Primer test: `formatters.test.ts` (6 casos). Corregidos errores TS preexistentes en `ValuationView.tsx` (campos opcionales de `ValuationResult`) y `LiveProjectionsView.tsx` (narrowing de tabs PNL/BS/CF/RATIOS) para desbloquear `npm run build` en CI.
 - 2026-04-18 · **1.6** 10 tests backend adicionales: `test_historical_validator.py` (7 reglas, happy + fail por regla) y `test_debt_schedule.py` (revolver draw, bullet maturity, empty config). Total backend = 17 tests.
 - 2026-04-18 · **1.7** Ruff integrado: `backend/pyproject.toml` con selección F+I, auto-fix aplicado a 45 imports. `ruff check` añadido como paso bloqueante del job backend en CI.
+- 2026-04-19 · **2.1** `.pre-commit-config.yaml` con ruff (lint + format) y hooks estándar (trailing-whitespace, end-of-file, yaml/json/toml). Mypy se difiere a fase 3 para no bloquear con un codebase aún en evolución.
+- 2026-04-19 · **2.2** ESLint + Prettier + tsconfig strict. `noUnusedLocals/Parameters=true` desbloquea detección temprana de muerto en componentes. ESLint mínimo: extends recommended + react-hooks (sin reglas estilísticas por encima de Prettier).
+- 2026-04-19 · **2.3** RBAC end-to-end. Tres helpers en `app/api/deps.py`: `get_project_or_404` (lectura: owner/viewer/editor), `get_project_for_write` (owner/editor; viewer→403), `get_project_for_owner` (sólo owner; outsider→404 para no filtrar existencia). Sweep automatizado actualizó 13 routes (POST/PUT/DELETE/PATCH) a `_for_write`; `sharing.py` a `_for_owner`. 4 tests en `tests/unit/test_rbac.py`. Bug fixes aflorados: índices duplicados en `project.py` (`ix_*_entity_id`) y self-referential relationship rota en `entity.py` (faltaba `remote_side`). `Settings.Config.extra="ignore"` para tolerar variables extra en `.env`.
+- 2026-04-19 · **2.4** Schema de errores uniforme: `{"error": {"code", "message", "request_id", "details?"}}`. Tres handlers en `app/core/errors.py` (HTTPException, RequestValidationError, Exception catch-all). `request_id_middleware` propaga/genera `X-Request-ID` y lo enlaza a `structlog.contextvars` para correlación logs↔respuesta. `app/core/logging.py` con structlog (JSON en prod, ConsoleRenderer en DEBUG). 4 tests cubren los tres handlers + propagación de request_id entrante.
+- 2026-04-19 · **2.5** Auditoría de deps: 8 paquetes sin un solo `import` en `app/` eliminados (`pandas`, `yfinance`, `fuzzywuzzy`, `python-Levenshtein`, `numpy`, `numpy-financial`, `reportlab`); `httpx` movido a `requirements-dev.txt` (sólo lo usa `TestClient`). `requirements.txt` pasa de 24 a 17 líneas, todas con `==`. Añadido `structlog==24.4.0`. Resultado: install más rápido y menos superficie de seguridad.

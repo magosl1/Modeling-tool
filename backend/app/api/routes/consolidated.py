@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
 from app.models.eliminations import IntercompanyTransaction
 from app.models.entity import Entity
@@ -122,7 +122,7 @@ def create_elimination(
             "amount_by_year": {"2024": 150000, "2025": 160000}
         }
     """
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
 
     for fld in ("from_entity_id", "to_entity_id", "transaction_type", "description", "amount_by_year"):
         if fld not in payload:
@@ -165,7 +165,7 @@ def update_elimination(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     record = db.query(IntercompanyTransaction).filter(
         IntercompanyTransaction.id == elim_id,
         IntercompanyTransaction.project_id == project_id,
@@ -198,7 +198,7 @@ def delete_elimination(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     record = db.query(IntercompanyTransaction).filter(
         IntercompanyTransaction.id == elim_id,
         IntercompanyTransaction.project_id == project_id,

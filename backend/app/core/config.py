@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
     def validate_runtime(self) -> None:
         if not self.DEBUG and self.SECRET_KEY in INSECURE_SECRETS:

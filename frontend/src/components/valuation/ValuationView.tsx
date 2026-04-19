@@ -43,6 +43,8 @@ export default function ValuationView({ projectId }: Props) {
 
   useEffect(() => {
     if (existing && !result) setResult(existing)
+    // `result` intentionally omitted: we only want to seed it once from `existing`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing])
 
   const runMutation = useMutation({

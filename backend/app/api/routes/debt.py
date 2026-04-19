@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
 from app.models.project import DebtTranche, RevolverConfig
 from app.models.user import User
@@ -60,7 +60,7 @@ def save_revolver_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     config = db.query(RevolverConfig).filter(
         RevolverConfig.project_id == project_id,
         RevolverConfig.scenario_id == body.scenario_id,
@@ -118,7 +118,7 @@ def save_tranches(
     current_user: User = Depends(get_current_user),
 ):
     """Replace all tranches for a project/scenario."""
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     db.query(DebtTranche).filter(
         DebtTranche.project_id == project_id,
         DebtTranche.scenario_id == scenario_id,

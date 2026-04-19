@@ -5,7 +5,7 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, get_project_or_404
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
 from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption
 from app.models.user import User
@@ -81,7 +81,7 @@ def save_module_assumptions(
     """Save/overwrite assumption configuration for a module."""
     if module not in MODULES:
         raise HTTPException(400, f"Unknown module: {module}")
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
 
     # Delete existing assumptions for this module
     existing = db.query(ProjectionAssumption).filter(

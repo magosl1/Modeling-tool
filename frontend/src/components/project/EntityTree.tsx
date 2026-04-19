@@ -3,7 +3,7 @@
  * Supports single_entity (collapses to one item) and multi_entity projects.
  */
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import clsx from 'clsx'

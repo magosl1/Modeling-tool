@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectionsApi } from '../../services/api'
-import type { ProjectionsResponse, StatementData } from '../../types/api'
+import type { ProjectionsResponse } from '../../types/api'
 import { useFormatNumber } from '../../utils/formatters'
 import FormatConfigurator from '../common/FormatConfigurator'
 import RatiosView from './RatiosView'
 
-interface Props { projectId: string; module: string; }
+interface Props { projectId: string; module?: string }
 
 const PNL_ITEMS = [
     'Revenue', 'Cost of Goods Sold', 'Gross Profit', 'SG&A', 'R&D', 'D&A',
@@ -41,7 +41,7 @@ const COST_LINES = new Set([
     'Other OpEx', 'Interest Expense', 'Tax',
 ])
 
-function FinancialTable({ items, data, years, title, fmt }: { items: string[]; data: Record<string, Record<string, string>>; years: number[]; title: string; fmt: (val: string | number | undefined) => string }) {
+function FinancialTable({ items, data, years, fmt }: { items: string[]; data: Record<string, Record<string, string>>; years: number[]; title?: string; fmt: (val: string | number | undefined) => string }) {
     return (
         <div className="overflow-auto border rounded-b-lg border-t-0 bg-white" style={{ maxHeight: '600px' }}>
             <table className="w-full text-xs">
@@ -90,7 +90,7 @@ function FinancialTable({ items, data, years, title, fmt }: { items: string[]; d
     )
 }
 
-export default function LiveProjectionsView({ projectId, module }: Props) {
+export default function LiveProjectionsView({ projectId }: Props) {
     const [activeTab, setActiveTab] = useState<'PNL' | 'BS' | 'CF' | 'RATIOS'>('PNL')
     const fmt = useFormatNumber()
 

@@ -22,7 +22,7 @@ export default function Dashboard() {
     queryFn: () => projectsApi.list().then(r => r.data),
   })
 
-  const { data: sharedProjects = [], isLoading: sharedLoading } = useQuery({
+  const { data: sharedProjects = [] } = useQuery({
     queryKey: ['projects-shared-with-me'],
     queryFn: () => sharingApi.getSharedWithMe().then(r => r.data),
   })

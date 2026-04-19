@@ -94,6 +94,16 @@ npm install
 npm run dev
 ```
 
+## Pre-commit hooks (optional but recommended)
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Runs ruff (auto-fix), whitespace fixers and yaml checks before each commit —
+the same checks CI enforces.
+
 ## Core User Flow
 
 1. **Create Project** — name, currency, scale, fiscal year end, projection years
