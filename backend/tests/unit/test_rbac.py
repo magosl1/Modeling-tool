@@ -17,8 +17,8 @@ from app.api.deps import (
     get_project_or_404,
 )
 from app.db.base import Base
-from app.models.entity import Entity  # noqa: F401 — register tables
 from app.models.eliminations import IntercompanyTransaction  # noqa: F401
+from app.models.entity import Entity  # noqa: F401 — register tables
 from app.models.project import Project, ProjectShare  # noqa: F401
 from app.models.user import User
 
