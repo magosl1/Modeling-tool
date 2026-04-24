@@ -9,8 +9,8 @@ from sqlalchemy import insert
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
-from app.api.routes.entities import get_or_create_default_entity
 from app.db.base import get_db
+from app.models.entity import Entity
 from app.models.project import (
     AssumptionParam,
     HistoricalData,
@@ -273,8 +273,16 @@ def run_projection(
             },
         )
 
-    # Ensure an entity exists for this project (backward compat for single-entity projects)
-    entity = get_or_create_default_entity(project, db)
+    # Every project has at least one entity after the Phase 0 finalize migration
+    # and because `create_project` seeds one. Use the first one in display order.
+    entity = (
+        db.query(Entity)
+        .filter(Entity.project_id == project.id)
+        .order_by(Entity.display_order)
+        .first()
+    )
+    if not entity:
+        raise HTTPException(status_code=500, detail="Project has no entity — data integrity error.")
 
     # Store projected financials — bulk insert is significantly faster than
     # individual db.add() calls for potentially hundreds of rows.

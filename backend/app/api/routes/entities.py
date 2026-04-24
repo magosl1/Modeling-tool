@@ -35,46 +35,6 @@ def get_entity_or_404(entity_id: str, user: User, db: Session) -> Entity:
     return entity
 
 
-def get_or_create_default_entity(project: Project, db: Session) -> Entity:
-    """
-    For single_entity projects: ensure at least one entity exists.
-    Returns the first/only entity, creating one if the project has none.
-    """
-    if project.entities:
-        return project.entities[0]
-
-    entity = Entity(
-        id=str(uuid.uuid4()),
-        project_id=project.id,
-        name=project.name,
-        entity_type="company_private",
-        currency=project.currency,
-        ownership_pct=100.0,
-        consolidation_method="full",
-        display_order=0,
-    )
-    db.add(entity)
-    db.flush()  # get the id without committing
-
-    # Backfill entity_id on all existing records for this project
-    db.query(HistoricalData).filter(
-        HistoricalData.project_id == project.id,
-        HistoricalData.entity_id == None,  # noqa: E711
-    ).update({"entity_id": entity.id})
-    db.query(ProjectionAssumption).filter(
-        ProjectionAssumption.project_id == project.id,
-        ProjectionAssumption.entity_id == None,  # noqa: E711
-    ).update({"entity_id": entity.id})
-    db.query(ProjectedFinancial).filter(
-        ProjectedFinancial.project_id == project.id,
-        ProjectedFinancial.entity_id == None,  # noqa: E711
-    ).update({"entity_id": entity.id})
-
-    db.commit()
-    db.refresh(entity)
-    return entity
-
-
 # ---------------------------------------------------------------------------
 # List entities for a project
 # ---------------------------------------------------------------------------
@@ -86,10 +46,6 @@ def list_entities(
     current_user: User = Depends(get_current_user),
 ):
     project = get_project_or_404(project_id, current_user, db)
-    # Auto-provision a default entity for single_entity projects that have none
-    if project.project_type == "single_entity" and not project.entities:
-        get_or_create_default_entity(project, db)
-        db.refresh(project)
     return project.entities
 
 
