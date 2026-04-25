@@ -12,15 +12,16 @@ Each revenue stream is stored as a RevenueStream record (scenario_id=NULL
 = base config).  Projection assumptions for each stream are auto-created /
 kept in sync whenever the stream list is saved.
 """
+import uuid
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-import uuid
 
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
+from app.models.project import ProjectionAssumption, RevenueStream
 from app.models.user import User
-from app.models.project import RevenueStream, ProjectionAssumption
-from app.api.deps import get_current_user, get_project_or_404
 from app.services.historical_validator import STANDARD_PNL_ITEMS  # single source of truth
 
 router = APIRouter(prefix="/projects", tags=["revenue-streams"])
@@ -112,7 +113,7 @@ def save_revenue_streams(
 
     Also keeps ProjectionAssumption records for module='revenue' in sync.
     """
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
 
     if not streams:
         raise HTTPException(400, "At least one revenue stream is required")
@@ -163,7 +164,7 @@ def detect_revenue_streams(
     Used after uploading historical data to confirm / adjust stream configuration.
     """
     from app.models.project import HistoricalData
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
 
     records = (
         db.query(HistoricalData)

@@ -1,12 +1,33 @@
-import logging
 import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, projects, historical, assumptions, projections, valuation, templates, ratios, scenarios, debt, fx, simulation, sharing, curves, metadata, entities, revenue_streams, consolidated
-from app.core.config import settings
 
-logger = logging.getLogger("uvicorn.access")
+from app.api.routes import (
+    assumptions,
+    auth,
+    consolidated,
+    curves,
+    debt,
+    entities,
+    fx,
+    historical,
+    metadata,
+    projections,
+    projects,
+    ratios,
+    revenue_streams,
+    scenarios,
+    sharing,
+    simulation,
+    templates,
+    valuation,
+)
+from app.core.config import settings
+from app.core.errors import install_exception_handlers, request_id_middleware
+from app.core.logging import get_logger
+
+log = get_logger("app.access")
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -14,18 +35,21 @@ app = FastAPI(
     version="1.0.0",
 )
 
+install_exception_handlers(app)
+app.middleware("http")(request_id_middleware)
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info(
-        "%s %s %d %.1fms",
-        request.method,
-        request.url.path,
-        response.status_code,
-        elapsed_ms,
+    log.info(
+        "request",
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration_ms=round(elapsed_ms, 1),
     )
     return response
 

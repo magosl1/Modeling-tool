@@ -43,6 +43,8 @@ export default function ValuationView({ projectId }: Props) {
 
   useEffect(() => {
     if (existing && !result) setResult(existing)
+    // `result` intentionally omitted: we only want to seed it once from `existing`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing])
 
   const runMutation = useMutation({
@@ -192,7 +194,7 @@ export default function ValuationView({ projectId }: Props) {
                 {['EBIT', 'Taxes', 'NOPAT', 'D&A & Amort', 'Less: Changes in WC', 'Less: Capex', 'FCFF'].map((row) => (
                   <tr key={row} className={row === 'FCFF' ? 'font-semibold bg-gray-50' : ''}>
                     <td className="py-2 px-4 font-medium text-gray-700 whitespace-nowrap">{row}</td>
-                    {Object.values(result.fcff_build_up).map((yearData: any, i: number) => (
+                    {Object.values(result.fcff_build_up!).map((yearData: any, i: number) => (
                       <td key={i} className={`text-right py-2 px-4 tabular-nums ${row === 'FCFF' ? 'text-blue-700' : ''}`}>
                         {fmt(yearData[row])}
                       </td>
@@ -227,7 +229,7 @@ export default function ValuationView({ projectId }: Props) {
                 {['EV / EBITDA', 'EV / Revenue', 'P / E'].map(mult => (
                   <tr key={mult}>
                     <td className="py-2 px-4 font-medium text-gray-700 whitespace-nowrap">{mult}</td>
-                    {Object.values(result.implied_multiples).map((yearData: any, i: number) => (
+                    {Object.values(result.implied_multiples!).map((yearData: any, i: number) => (
                       <td key={i} className="text-right py-2 px-4 tabular-nums">
                         {yearData[mult] ? `${fmt(yearData[mult])}x` : 'N/A'}
                       </td>

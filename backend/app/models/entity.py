@@ -1,8 +1,10 @@
 """Entity model — the fundamental modeling unit for the universal platform."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Float, Boolean, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
+
 from app.db.base import Base
 
 
@@ -69,7 +71,11 @@ class Entity(Base):
         "Project", back_populates="entities", foreign_keys=[project_id]
     )
 
-    # Self-referential relationship for hierarchy
+    # Self-referential relationship for hierarchy.
+    # remote_side on the parent side tells SQLAlchemy this is the many-to-one direction.
     children: Mapped[list["Entity"]] = relationship(
-        "Entity", backref="parent", foreign_keys=[parent_entity_id], lazy="select"
+        "Entity",
+        backref=backref("parent", remote_side="Entity.id"),
+        foreign_keys=[parent_entity_id],
+        lazy="select",
     )

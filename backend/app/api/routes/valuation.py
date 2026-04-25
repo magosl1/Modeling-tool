@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from decimal import Decimal
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project, ProjectedFinancial, ValuationInput, ValuationOutput
-from app.api.deps import get_current_user, get_project_or_404
-from app.services.dcf_engine import DCFEngine
-from app.schemas.project import ValuationInputCreate
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
+from app.db.base import get_db
+from app.models.project import Project, ProjectedFinancial, ValuationInput, ValuationOutput
+from app.models.user import User
+from app.schemas.project import ValuationInputCreate
+from app.services.dcf_engine import DCFEngine
 
 router = APIRouter(prefix="/projects", tags=["valuation"])
 
@@ -38,7 +40,7 @@ def run_valuation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     pnl, bs, cf, proj_years = _load_projections(project_id, db)
 
     # Save inputs

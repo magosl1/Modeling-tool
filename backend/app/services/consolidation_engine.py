@@ -24,10 +24,9 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.eliminations import IntercompanyTransaction
 from app.models.entity import Entity
 from app.models.project import HistoricalData, ProjectedFinancial
-from app.models.eliminations import IntercompanyTransaction
-
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 

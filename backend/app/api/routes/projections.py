@@ -1,20 +1,26 @@
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import insert
 from sqlalchemy.orm import Session, joinedload
-from typing import Dict, List
-from decimal import Decimal
+
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
-from app.models.user import User
+from app.models.entity import Entity
 from app.models.project import (
-    Project, HistoricalData, ProjectionAssumption, AssumptionParam,
-    ProjectedFinancial, NOLBalance
+    AssumptionParam,
+    HistoricalData,
+    NOLBalance,
+    Project,
+    ProjectedFinancial,
+    ProjectionAssumption,
 )
-from app.api.deps import get_current_user, get_project_or_404
-from app.api.routes.entities import get_or_create_default_entity
+from app.models.user import User
 from app.services.projection_engine import ProjectionEngine
-import uuid
-from datetime import datetime, timezone
 
 router = APIRouter(prefix="/projects", tags=["projections"])
 
@@ -246,7 +252,7 @@ def run_projection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     pnl, bs, cf, hist_years = _load_historical(project_id, db)
 
     if not hist_years:
@@ -267,8 +273,16 @@ def run_projection(
             },
         )
 
-    # Ensure an entity exists for this project (backward compat for single-entity projects)
-    entity = get_or_create_default_entity(project, db)
+    # Every project has at least one entity after the Phase 0 finalize migration
+    # and because `create_project` seeds one. Use the first one in display order.
+    entity = (
+        db.query(Entity)
+        .filter(Entity.project_id == project.id)
+        .order_by(Entity.display_order)
+        .first()
+    )
+    if not entity:
+        raise HTTPException(status_code=500, detail="Project has no entity — data integrity error.")
 
     # Store projected financials — bulk insert is significantly faster than
     # individual db.add() calls for potentially hundreds of rows.
@@ -387,8 +401,9 @@ def export_projections(
     proj_years = sorted(proj_years)
     all_years = hist_years + proj_years
 
-    import openpyxl
     from io import BytesIO
+
+    import openpyxl
     from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -418,7 +433,7 @@ def export_projections(
         for i in range(len(all_years)):
             ws.column_dimensions[get_column_letter(2 + i)].width = 14
 
-    from app.services.template_generator import PNL_ITEMS, CF_ITEMS, BS_ITEMS
+    from app.services.template_generator import BS_ITEMS, CF_ITEMS, PNL_ITEMS
 
     ws_pnl = wb.active
     ws_pnl.title = "P&L"

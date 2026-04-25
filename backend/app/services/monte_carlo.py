@@ -4,14 +4,14 @@ Monte Carlo simulation service.
 Runs N iterations of the projection engine + DCF engine with user-defined
 driver distributions and returns equity value distribution statistics.
 """
-import random
 import math
-from decimal import Decimal
-from typing import Dict, List, Optional, Any
+import random
 from copy import deepcopy
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
-from app.services.projection_engine import ProjectionEngine
 from app.services.dcf_engine import DCFEngine
+from app.services.projection_engine import ProjectionEngine
 
 ZERO = Decimal("0")
 

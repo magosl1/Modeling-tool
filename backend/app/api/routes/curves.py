@@ -1,10 +1,12 @@
+import uuid
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
-from app.models.user import User
 from app.models.project import ExternalCurveValue
-from app.api.deps import get_current_user, get_project_or_404
-import uuid
+from app.models.user import User
 
 router = APIRouter(prefix="/projects", tags=["curves"])
 
@@ -32,7 +34,7 @@ def save_curves(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    get_project_or_404(project_id, current_user, db)
+    get_project_for_write(project_id, current_user, db)
     
     # Clear existing
     db.query(ExternalCurveValue).filter(ExternalCurveValue.project_id == project_id).delete()

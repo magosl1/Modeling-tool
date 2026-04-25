@@ -47,11 +47,16 @@ financial_modeler/
 
 ```bash
 cd financial_modeler
-cp backend/.env.example backend/.env
-# Edit backend/.env with your settings
+cp .env.example .env                  # docker-compose reads this from repo root
+cp backend/.env.example backend/.env  # backend app reads this for local/non-docker runs
+# Edit both .env files and set a strong SECRET_KEY and POSTGRES_PASSWORD
 
 docker-compose up --build
 ```
+
+The Compose file requires `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+`SECRET_KEY` to be set (no more hardcoded defaults). The backend refuses to start
+with `DEBUG=false` if `SECRET_KEY` is a known insecure default.
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
@@ -65,9 +70,22 @@ cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # edit with your DB/Redis settings
-python -m app.db.init_db     # create tables
+python -m app.db.init_db     # create tables and stamp alembic baseline
 uvicorn app.main:app --reload --port 8000
 ```
+
+## Database migrations
+
+This project uses **Alembic**. The baseline revision (`0001_baseline`) is empty
+and simply marks "the schema produced by `app.db.init_db` on a fresh install,
+or the post-Phase-3 schema on a pre-existing install".
+
+- **Fresh install:** `python -m app.db.init_db` creates tables and stamps
+  `0001_baseline` automatically.
+- **Existing install (pre-Phase 0):** run the legacy scripts in
+  `backend/migrations_legacy/` in order, then `alembic stamp 0001_baseline`.
+- **New schema changes:** `alembic revision --autogenerate -m "..."` followed
+  by `alembic upgrade head`. Never add loose `.sql` scripts again.
 
 **Frontend:**
 ```bash
@@ -75,6 +93,16 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Pre-commit hooks (optional but recommended)
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Runs ruff (auto-fix), whitespace fixers and yaml checks before each commit —
+the same checks CI enforces.
 
 ## Core User Flow
 

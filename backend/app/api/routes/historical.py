@@ -1,18 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import Response
-from sqlalchemy.orm import Session
-from typing import List
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project, HistoricalData, RevenueStream
-from app.api.deps import get_current_user, get_project_or_404
-from app.services.template_generator import generate_historical_template
-from app.services.historical_validator import (
-    parse_historical_excel, validate_historical_data,
-)
-from app.api.routes.revenue_streams import _sync_revenue_assumptions
 import uuid
 from datetime import datetime, timezone
+from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
+from app.api.routes.revenue_streams import _sync_revenue_assumptions
+from app.db.base import get_db
+from app.models.project import HistoricalData, Project, RevenueStream
+from app.models.user import User
+from app.services.historical_validator import (
+    parse_historical_excel,
+    validate_historical_data,
+)
+from app.services.template_generator import generate_historical_template
 
 router = APIRouter(prefix="/projects", tags=["historical"])
 
@@ -62,7 +65,7 @@ async def upload_historical_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = get_project_or_404(project_id, current_user, db)
+    project = get_project_for_write(project_id, current_user, db)
     content = await file.read()
 
     if len(content) > MAX_UPLOAD_SIZE:

@@ -1,6 +1,7 @@
 """Pydantic schemas for Entity model."""
+from typing import Any, List, Optional
+
 from pydantic import BaseModel, field_validator
-from typing import Optional, List, Any
 
 
 class EntityCreate(BaseModel):

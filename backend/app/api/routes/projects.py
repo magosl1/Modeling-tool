@@ -1,13 +1,16 @@
+import uuid
+from datetime import datetime, timezone
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from app.db.base import get_db
-from app.models.user import User
-from app.models.project import Project
-from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
+
 from app.api.deps import get_current_user
-from datetime import datetime, timezone
-import uuid
+from app.db.base import get_db
+from app.models.entity import Entity
+from app.models.project import Project
+from app.models.user import User
+from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -28,6 +31,22 @@ def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_u
         status="draft",
     )
     db.add(project)
+    db.flush()
+
+    # Every project owns at least one entity. Single-entity projects will only
+    # ever have this one; multi-entity projects can add more later. Creating
+    # it up front keeps entity_id NOT NULL invariants satisfied from day one.
+    db.add(Entity(
+        id=str(uuid.uuid4()),
+        project_id=project.id,
+        name=project.name,
+        entity_type="company_private",
+        currency=project.currency,
+        ownership_pct=100.0,
+        consolidation_method="full",
+        display_order=0,
+    ))
+
     db.commit()
     db.refresh(project)
     return project

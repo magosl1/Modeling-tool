@@ -1,7 +1,7 @@
 """Single source of truth for line-item definitions used by frontend and backend."""
 from fastapi import APIRouter
 
-from app.services.template_generator import PNL_ITEMS, BS_ITEMS, CF_ITEMS
+from app.services.template_generator import BS_ITEMS, CF_ITEMS, PNL_ITEMS
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 

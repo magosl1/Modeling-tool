@@ -1,8 +1,21 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import String, DateTime, Integer, Date, Enum as SAEnum, ForeignKey, Numeric, UniqueConstraint, Index, JSON
+
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
 
 
@@ -78,20 +91,17 @@ class Scenario(Base):
 class HistoricalData(Base):
     __tablename__ = "historical_data"
     __table_args__ = (
-        # entity_id is included so multiple entities in the same project can each have
-        # the same line_item/year without violating uniqueness.
-        # NULL entity_id is allowed for legacy single-entity rows (NULL != NULL in PG).
+        # Uniqueness is per (project, entity, statement, line, year).
         UniqueConstraint("project_id", "entity_id", "statement_type", "line_item", "year",
                          name="uq_historical_data_entity"),
         Index("ix_historical_data_project_id", "project_id"),
-        Index("ix_historical_data_entity_id", "entity_id"),
+        # entity_id index is defined inline via `index=True` on the column.
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
-    # Phase 0: entity_id — set for all new records; legacy records use project_id only
-    entity_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=False, index=True
     )
     statement_type: Mapped[str] = mapped_column(
         SAEnum("PNL", "BS", "CF", name="statement_type_enum"), nullable=False
@@ -137,14 +147,13 @@ class ProjectionAssumption(Base):
     __tablename__ = "projection_assumptions"
     __table_args__ = (
         Index("ix_projection_assumptions_project_id", "project_id"),
-        Index("ix_projection_assumptions_entity_id", "entity_id"),
+        # entity_id index is defined inline via `index=True` on the column.
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
-    # Phase 0: entity_id — set for all new records; legacy records use project_id only
-    entity_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=False, index=True
     )
     scenario_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=True)
     module: Mapped[str] = mapped_column(
@@ -203,9 +212,8 @@ class ProjectedFinancial(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
-    # Phase 0: entity_id — set for all new records; legacy records use project_id only
-    entity_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True, index=True
+    entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=False, index=True
     )
     scenario_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=True)
     statement_type: Mapped[str] = mapped_column(

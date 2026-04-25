@@ -1,4 +1,4 @@
-import { useFormattingStore, NumericsUnit, NumberSeparatorStyle } from '../../store/formattingStore'
+import { useFormattingStore, NumericsUnit } from '../../store/formattingStore'
 import { useState, useRef, useEffect } from 'react'
 
 export default function FormatConfigurator() {

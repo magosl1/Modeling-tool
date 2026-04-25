@@ -1,5 +1,6 @@
 """Celery task definitions (stub for future async jobs)."""
 from celery import Celery
+
 from app.core.config import settings
 
 celery_app = Celery("financial_modeler", broker=settings.REDIS_URL)
