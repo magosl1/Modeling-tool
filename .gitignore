@@ -44,3 +44,8 @@ alembic/versions/*.pyc
 # Test artifacts
 *.xlsx
 *.tmp
+
+# Local dev databases
+*.db
+*.sqlite
+*.sqlite3
