@@ -8,6 +8,7 @@ import type {
   RatiosResponse,
   LoginRequest, RegisterRequest, AuthTokens,
   ConsolidatedResponse, IntercompanyElimination, EliminationCreate,
+  AISettingsUpdate, AISettingsOut, AISettingsTestResult, AIIngestionResponse,
 } from '../types/api'
 
 const BASE_URL = '/api/v1'
@@ -91,8 +92,17 @@ export const historicalApi = {
     form.append('file', file)
     return api.post(`/projects/${projectId}/upload/historical`, form)
   },
+  uploadAI: (projectId: string, file: File): Promise<AxiosResponse<AIIngestionResponse>> => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post(`/projects/${projectId}/upload-ai`, form)
+  },
+  saveJSON: (projectId: string, data: { parsed: any; years: number[]; entity_id?: string }): Promise<AxiosResponse<{ message: string }>> =>
+    api.post(`/projects/${projectId}/save-json`, data),
   getData: (projectId: string): Promise<AxiosResponse<HistoricalResponse>> =>
     api.get(`/projects/${projectId}/historical`),
+  getEntityHistorical: (entityId: string): Promise<AxiosResponse<HistoricalResponse>> =>
+    api.get(`/entities/${entityId}/historical`),
 }
 
 // Assumptions
@@ -215,6 +225,18 @@ export const curvesApi = {
   get: (projectId: string) => api.get(`/projects/${projectId}/curves`),
   save: (projectId: string, data: Record<string, { is_percentage: boolean, values: Record<string, number> }>) => 
     api.put(`/projects/${projectId}/curves`, data),
+}
+
+// AI Settings — user API keys for AI ingestion
+export const aiSettingsApi = {
+  get: (): Promise<AxiosResponse<AISettingsOut>> =>
+    api.get('/me/ai-settings'),
+  save: (data: AISettingsUpdate): Promise<AxiosResponse<AISettingsOut>> =>
+    api.put('/me/ai-settings', data),
+  delete: (): Promise<AxiosResponse<void>> =>
+    api.delete('/me/ai-settings'),
+  test: (): Promise<AxiosResponse<AISettingsTestResult>> =>
+    api.post('/me/ai-settings/test'),
 }
 
 export default api

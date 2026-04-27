@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    ai_settings,
     assumptions,
     auth,
     consolidated,
@@ -112,6 +113,9 @@ app.include_router(revenue_streams.router, prefix=settings.API_V1_STR)
 
 # Phase 3: Consolidated view + intercompany eliminations
 app.include_router(consolidated.router, prefix=settings.API_V1_STR)
+
+# AI Settings (user API keys for AI ingestion)
+app.include_router(ai_settings.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")

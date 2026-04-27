@@ -256,3 +256,61 @@ export interface RegisterRequest {
   password: string
   name: string
 }
+
+// ── AI Settings ──────────────────────────────────────────
+
+export type AIProvider = 'google' | 'anthropic' | 'openai'
+
+export interface AISettingsUpdate {
+  provider: AIProvider
+  api_key: string
+  cheap_model: string
+  smart_model: string
+}
+
+export interface AISettingsOut {
+  provider: string
+  api_key_masked: string
+  cheap_model: string
+  smart_model: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AISettingsTestResult {
+  success: boolean
+  model: string
+  message: string
+  latency_ms: number | null
+}
+
+// ── AI Ingestion ─────────────────────────────────────────
+
+export interface AIValidationMessage {
+  tab: string
+  line_item: string
+  year: number
+  message: string
+}
+
+export interface AIIngestionResponse {
+  parsed: {
+    PNL: Record<string, Record<string, number>>
+    BS: Record<string, Record<string, number>>
+    CF: Record<string, Record<string, number>>
+  }
+  mappings: Array<{
+    sheet_name: string
+    row_index: number
+    original_name: string
+    mapped_to: string
+    confidence: number
+  }>
+  years: number[]
+  validation_errors: AIValidationMessage[]
+  ai_stats: {
+    phase2_used: boolean
+    reasons: string[]
+    stats: Record<string, any>
+  }
+}

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_ID: Optional[str] = None
     MICROSOFT_CLIENT_SECRET: Optional[str] = None
 
+    # AI Ingestion
+    AI_KEYS_ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys
+    ENABLE_AI_INGESTION: bool = True
+
     class Config:
         env_file = ".env"
         extra = "ignore"

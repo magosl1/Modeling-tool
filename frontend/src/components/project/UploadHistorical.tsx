@@ -13,16 +13,18 @@ interface ValidationError {
   message: string
 }
 
-interface Props { projectId: string; project: Project }
+interface Props { projectId: string; project: Project; entityId?: string }
 
-export default function UploadHistorical({ projectId, project }: Props) {
+export default function UploadHistorical({ projectId, project, entityId }: Props) {
   const qc = useQueryClient()
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [detectedStreams, setDetectedStreams] = useState<string[]>([])
 
   const { data: historical } = useQuery<HistoricalResponse>({
-    queryKey: ['historical', projectId],
-    queryFn: () => historicalApi.getData(projectId).then(r => r.data),
+    queryKey: ['historical', projectId, entityId],
+    queryFn: () => entityId 
+      ? historicalApi.getEntityHistorical(entityId).then(r => r.data)
+      : historicalApi.getData(projectId).then(r => r.data),
   })
 
   const uploadMutation = useMutation({
@@ -32,6 +34,7 @@ export default function UploadHistorical({ projectId, project }: Props) {
       const detected: string[] = res.data?.detected_revenue_streams ?? []
       setDetectedStreams(detected)
       qc.invalidateQueries({ queryKey: ['historical', projectId] })
+      if (entityId) qc.invalidateQueries({ queryKey: ['historical', projectId, entityId] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
       qc.invalidateQueries({ queryKey: ['revenue-streams', projectId] })
       toast.success('Historical data uploaded and validated!')

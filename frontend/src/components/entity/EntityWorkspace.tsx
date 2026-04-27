@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import { entitiesApi, assumptionsApi } from '../../services/api'
 import type { Entity, ModuleStatus } from '../../types/api'
 import UploadHistorical from '../project/UploadHistorical'
+import UploadHistoricalAI from '../project/UploadHistoricalAI'
 import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
 import ValuationView from '../valuation/ValuationView'
@@ -147,6 +148,8 @@ interface EntityWorkspaceProps {
 }
 
 export default function EntityWorkspace({ entityId, project }: EntityWorkspaceProps) {
+  const [uploadMode, setUploadMode] = useState<'ai' | 'manual'>('ai')
+
   const { data: entity, isLoading, refetch } = useQuery({
     queryKey: ['entity', entityId],
     queryFn: () => entitiesApi.get(entityId).then(r => r.data),
@@ -234,10 +237,41 @@ export default function EntityWorkspace({ entityId, project }: EntityWorkspacePr
             <Route
               path="historical"
               element={
-                <UploadHistorical
-                  projectId={project.id}
-                  project={project as Parameters<typeof UploadHistorical>[0]['project']}
-                />
+                <div className="flex flex-col gap-6">
+                  <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
+                    <button
+                      onClick={() => setUploadMode('ai')}
+                      className={clsx(
+                        "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        uploadMode === 'ai' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      )}
+                    >
+                      ✨ AI Ingestion
+                    </button>
+                    <button
+                      onClick={() => setUploadMode('manual')}
+                      className={clsx(
+                        "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        uploadMode === 'manual' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      )}
+                    >
+                      Template (Manual)
+                    </button>
+                  </div>
+                  {uploadMode === 'ai' ? (
+                    <UploadHistoricalAI
+                      projectId={project.id}
+                      entityId={entityId}
+                      project={project as Parameters<typeof UploadHistoricalAI>[0]['project']}
+                    />
+                  ) : (
+                    <UploadHistorical
+                      projectId={project.id}
+                      entityId={entityId}
+                      project={project as Parameters<typeof UploadHistorical>[0]['project']}
+                    />
+                  )}
+                </div>
               }
             />
             <Route path="assumptions" element={<AssumptionsPanel projectId={project.id} />} />

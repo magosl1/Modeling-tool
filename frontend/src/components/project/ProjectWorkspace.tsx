@@ -11,13 +11,14 @@
  *   /projects/:id/assumptions/*         → legacy single-entity assumptions
  *   etc. (all legacy routes preserved)
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { projectsApi, assumptionsApi, entitiesApi } from '../../services/api'
 import type { ModuleStatus } from '../../types/api'
 import UploadHistorical from './UploadHistorical'
+import UploadHistoricalAI from './UploadHistoricalAI'
 import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
 import ValuationView from '../valuation/ValuationView'
@@ -59,6 +60,8 @@ export default function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+
+  const [uploadMode, setUploadMode] = useState<'ai' | 'manual'>('ai')
 
   const isAssumptionsRoute = location.pathname.includes('/assumptions')
 
@@ -216,7 +219,33 @@ export default function ProjectWorkspace() {
                     <p className="text-sm mt-1">or click the Consolidated View to see group financials</p>
                   </div>
                 ) : (
-                  <UploadHistorical projectId={id!} project={project} />
+                  <div className="flex flex-col gap-6">
+                    <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
+                      <button
+                        onClick={() => setUploadMode('ai')}
+                        className={clsx(
+                          "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                          uploadMode === 'ai' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                        )}
+                      >
+                        ✨ AI Ingestion
+                      </button>
+                      <button
+                        onClick={() => setUploadMode('manual')}
+                        className={clsx(
+                          "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                          uploadMode === 'manual' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                        )}
+                      >
+                        Template (Manual)
+                      </button>
+                    </div>
+                    {uploadMode === 'ai' ? (
+                      <UploadHistoricalAI projectId={id!} project={project} />
+                    ) : (
+                      <UploadHistorical projectId={id!} project={project} />
+                    )}
+                  </div>
                 )
               }
             />

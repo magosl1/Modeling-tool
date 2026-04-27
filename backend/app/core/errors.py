@@ -105,8 +105,37 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 def install_exception_handlers(app: FastAPI) -> None:
+    from app.services.document_extractor import ExtractionError
+    from app.services.llm_client import LLMError
+
+    async def llm_exception_handler(request: Request, exc: LLMError) -> JSONResponse:
+        rid = _request_id(request)
+        response = JSONResponse(
+            status_code=exc.http_status,
+            content=_payload(
+                code="llm_error",
+                message=str(exc),
+                request_id=rid,
+            ),
+        )
+        return _with_rid_header(response, rid)
+
+    async def extraction_exception_handler(request: Request, exc: ExtractionError) -> JSONResponse:
+        rid = _request_id(request)
+        response = JSONResponse(
+            status_code=exc.http_status,
+            content=_payload(
+                code="extraction_error",
+                message=str(exc),
+                request_id=rid,
+            ),
+        )
+        return _with_rid_header(response, rid)
+
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(LLMError, llm_exception_handler)
+    app.add_exception_handler(ExtractionError, extraction_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
 

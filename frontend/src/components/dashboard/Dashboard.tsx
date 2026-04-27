@@ -48,6 +48,9 @@ export default function Dashboard() {
             <button onClick={() => navigate('/projects/new')} className="btn-primary">
               + New Project
             </button>
+            <button onClick={() => navigate('/settings/ai')} className="btn-secondary" title="AI Settings">
+              ⚙️ AI
+            </button>
             <button onClick={logout} className="btn-secondary">Log out</button>
           </div>
         </div>

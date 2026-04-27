@@ -4,6 +4,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from app.db.base import Base, engine
+from app.models.ai_settings import UserAISettings  # noqa: F401
 from app.models.eliminations import IntercompanyTransaction  # noqa: F401
 from app.models.entity import Entity  # noqa: F401 — registers table with metadata
 from app.models.project import (
