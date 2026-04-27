@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-os.environ["SECRET_KEY"] = "test-secret-key-not-used-in-prod"
+os.environ["SECRET_KEY"] = "test-secret-key-only-for-pytest-not-used-in-production-abcdefgh"
 os.environ["DEBUG"] = "true"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
