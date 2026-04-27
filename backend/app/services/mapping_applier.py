@@ -6,7 +6,7 @@ and outputs the canonical JSON structure ready to be validated.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Optional
 
 from app.core.logging import get_logger
 from app.services.document_extractor import ExtractedDocument
@@ -21,6 +21,98 @@ CANONICAL_CF = {item[0] if isinstance(item, tuple) else item for item in CF_ITEM
 
 # Regex to detect years in column headers (e.g. "2023", "FY 2024", "12/31/2022")
 YEAR_REGEX = re.compile(r'\b(19|20)\d{2}\b')
+
+# Excel error markers (English + Spanish locale variants)
+EXCEL_ERROR_PREFIXES = ("#REF", "#¡REF", "#NAME", "#¿NOMBRE", "#DIV", "#VALUE",
+                        "#¡VALOR", "#NUM", "#¡NUM", "#N/A", "#NULL", "#¡NULO")
+
+_THOUSANDS_DOT = re.compile(r'^-?\d{1,3}(\.\d{3})+$')
+_THOUSANDS_COMMA = re.compile(r'^-?\d{1,3}(,\d{3})+$')
+
+
+def parse_numeric(val: Any) -> Optional[float]:
+    """Robust numeric parser for international financial spreadsheets.
+
+    Handles:
+    - Native int/float passthrough.
+    - European decimals: "876,2" -> 876.2; "1.218,3" -> 1218.3.
+    - US decimals: "1,218.3" -> 1218.3; "876.2" -> 876.2.
+    - Parentheses negatives: "(3,4)" -> -3.4.
+    - Currency symbols and percent signs (raw value, NOT divided by 100).
+    - Excel error cells (#¡REF!, #DIV/0!, ...) -> None.
+    - Dashes / blank-equivalents -> None.
+    """
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    s = str(val).strip()
+    if not s:
+        return None
+
+    # Excel error markers
+    if s.upper().startswith(EXCEL_ERROR_PREFIXES) or s.startswith("#"):
+        return None
+
+    # Common blank-equivalents
+    if s.lower() in ("-", "—", "–", "n/a", "na", "nan", "none", "null"):
+        return None
+
+    # Strip currency, percent, NBSP, regular spaces
+    s = re.sub(r"[€$£¥% \s]", "", s)
+    if not s:
+        return None
+
+    # Parentheses → negative
+    neg = False
+    if s.startswith("(") and s.endswith(")"):
+        neg = True
+        s = s[1:-1]
+
+    # Leading/trailing minus
+    if s.startswith("-"):
+        neg = not neg
+        s = s[1:]
+    if s.endswith("-"):
+        neg = not neg
+        s = s[:-1]
+
+    if not s:
+        return None
+
+    has_comma = "," in s
+    has_dot = "." in s
+
+    if has_comma and has_dot:
+        # Whichever appears LAST is the decimal separator; the other is thousands.
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif has_comma:
+        # Pure thousands pattern (e.g. "1,234,567") -> strip commas.
+        # Otherwise treat comma as European decimal separator.
+        if _THOUSANDS_COMMA.match(s) and s.count(",") >= 1 and (
+            len(s.split(",")[-1]) == 3
+        ):
+            s = s.replace(",", "")
+        else:
+            s = s.replace(",", ".")
+    elif has_dot:
+        # Pure thousands pattern with dots (e.g. "1.234.567") -> strip dots.
+        # Single dot followed by ≥4 digits is also thousands ("1.234").
+        if _THOUSANDS_DOT.match(s):
+            s = s.replace(".", "")
+
+    try:
+        f = float(s)
+    except ValueError:
+        return None
+
+    return -f if neg else f
 
 
 def _extract_years(headers: list[Any]) -> dict[int, int]:
@@ -122,23 +214,43 @@ def apply_mappings(doc: ExtractedDocument, mappings: list[dict[str, Any]]) -> di
                 result[stmt][mapped_to] = {}
             
             for col_idx, year in year_cols.items():
-                if col_idx < len(row):
-                    val = row[col_idx]
-                    
-                    if val is not None:
-                        try:
-                            if isinstance(val, str):
-                                val = val.replace(",", "").replace(" ", "").replace("€", "").replace("$", "")
-                                if val.startswith("(") and val.endswith(")"):
-                                    val = "-" + val[1:-1]
-                            f_val = float(val)
-                            
-                            if year in result[stmt][mapped_to]:
-                                result[stmt][mapped_to][year] += f_val
-                            else:
-                                result[stmt][mapped_to][year] = f_val
-                                
-                        except (ValueError, TypeError):
-                            pass
+                if col_idx >= len(row):
+                    continue
+                val = row[col_idx]
+                if val is None:
+                    continue
+
+                # Skip cells that are themselves a year header — these come from
+                # section header rows (e.g. "P&G (Mn€)" / "FLUJO DE CAJA (Mn€)")
+                # where the value column contains the year text instead of a number.
+                if isinstance(val, str) and YEAR_REGEX.search(val):
+                    continue
+
+                f_val = parse_numeric(val)
+                if f_val is None:
+                    if isinstance(val, str) and val.strip():
+                        log.debug(
+                            "unparseable_value",
+                            sheet=sheet_data.name,
+                            row=row_idx,
+                            col=col_idx,
+                            mapped_to=mapped_to,
+                            value=val[:50],
+                        )
+                    continue
+
+                # Defensive: cells that parse to exactly the year are headers.
+                if f_val == float(year) and (
+                    isinstance(val, str) or (isinstance(val, (int, float)) and val == year)
+                ):
+                    # Only skip if it's clearly a header row (no other numeric data
+                    # on this row would also equal the year). We treat any cell that
+                    # equals the column's year as a header echo.
+                    continue
+
+                if year in result[stmt][mapped_to]:
+                    result[stmt][mapped_to][year] += f_val
+                else:
+                    result[stmt][mapped_to][year] = f_val
 
     return result

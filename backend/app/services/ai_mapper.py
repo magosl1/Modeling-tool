@@ -24,7 +24,7 @@ CANONICAL_PNL = [item[0] if isinstance(item, tuple) else item for item in PNL_IT
 CANONICAL_BS = [item[0] if isinstance(item, tuple) else item for item in BS_ITEMS]
 CANONICAL_CF = [item[0] if isinstance(item, tuple) else item for item in CF_ITEMS]
 
-SYSTEM_PROMPT = f"""You are an expert financial analyst. Your task is to map line items extracted from a company's financial statements (P&L, Balance Sheet, Cash Flow) to our standard canonical line items.
+SYSTEM_PROMPT = f"""You are an expert financial analyst. Your task is to map line items extracted from a company's financial statements (P&L, Balance Sheet, Cash Flow) to our standard canonical line items. Documents may be in any language (English, Spanish, French, Italian, Portuguese, German). Map by financial meaning, not by literal string match.
 
 Here are the ONLY allowed canonical targets:
 
@@ -38,20 +38,47 @@ Cash Flow:
 {", ".join(CANONICAL_CF)}
 
 Special Rules:
-1. Ignore empty rows, totals, subtotals, dates, headers, or pure notes. For these, map them to "IGNORE".
-2. If an item clearly corresponds to one of the canonical targets, map it directly.
-3. If an item does not fit nicely, or is ambiguous, map it to "IGNORE".
-4. You may map multiple original items to the same canonical target if they represent the same concept.
-5. Base your decision primarily on the 'original_name'.
-6. Evaluate the confidence of your mapping (0.0 to 1.0). Be highly confident (0.9+) for exact matches or common translations (e.g., "Ventas" -> "Revenue"), and less confident (<0.8) for vague items.
+1. Map to "IGNORE" — empty rows, totals/subtotals, margin rows, ratios, dates, headers, section titles, KPIs, and pure notes.
+2. SECTION HEADERS that must always be IGNORE: "P&G", "P&L", "Cuenta de Resultados", "FLUJO DE CAJA", "Cash Flow", "BALANCE", "Balance Sheet", "DEUDA NETA", "Net Debt", "VARIACION DEUDA NETA", "ROCE", "EBITDA", "Margen EBITDA", "Margen EBIT", "EBITDA Margin", "EBIT Margin", "FLUJO DE CAJA LIBRE", "Free Cash Flow".
+3. Aggregates that must NOT be mapped (they are derived, not raw inputs): EBITDA, EBIT, Operating Cash Flow (when it's a subtotal in the source), Total Assets, Total Liabilities, Total Equity, Working Capital, Net Debt, Free Cash Flow. Map them to "IGNORE".
+4. If an item clearly corresponds to one of the canonical targets, map it directly.
+5. If an item is ambiguous or has no good match, map it to "IGNORE" rather than guessing.
+6. You may map multiple original items to the same canonical target if they represent the same concept.
+7. Confidence: 0.9+ for exact matches or well-known translations; 0.7–0.85 for reasonable inference; <0.7 if you are unsure (prefer IGNORE in that case).
+
+Common Spanish ↔ canonical mappings:
+- "Importe neto de la cifra de negocios" / "Ventas" / "Ingresos" → Revenue
+- "Aprovisionamientos" / "Consumo de materias primas" / "Coste de ventas" → Cost of Goods Sold
+- "Gastos de personal" / "Sueldos y salarios" → SG&A
+- "Otros gastos de explotación" / "Servicios exteriores" → Other OpEx
+- "Amortización" / "Dotación a la amortización" → D&A
+- "Amortización del inmovilizado intangible" → Amortization of Intangibles
+- "Resultado financiero" / "Gasto financiero neto" → Interest Expense (if negative) or split if both income and expense exist
+- "Ingresos financieros" → Interest Income
+- "Gastos financieros" → Interest Expense
+- "Impuesto sobre beneficios" / "Impuesto sobre sociedades" → Tax
+- "Resultado del ejercicio" / "Resultado neto" / "Resultado del Periodo" → Net Income
+- "Inmovilizado material" → Net PP&E
+- "Inmovilizado intangible" → Net Intangibles
+- "Fondo de comercio" → Goodwill
+- "Existencias" → Inventories
+- "Deudores comerciales" / "Clientes" → Accounts Receivable
+- "Tesorería" / "Efectivo y equivalentes" → Cash & Equivalents
+- "Acreedores comerciales" / "Proveedores" → Accounts Payable
+- "Deuda a corto plazo" / "Pasivos financieros corrientes" → Short-Term Debt
+- "Deuda a largo plazo" / "Pasivos financieros no corrientes" → Long-Term Debt
+- "Capital social" → Share Capital
+- "Reservas" / "Resultados acumulados" → Retained Earnings
+- "Capex" / "Inversiones en inmovilizado" → Capex
+- "Dividendos pagados" → Dividends Paid
 
 You MUST respond with ONLY a JSON array. No markdown, no explanation, no commentary.
 Each element must have these exact keys: "sheet_name", "row_index", "original_name", "mapped_to", "confidence".
 
 Example response format (respond ONLY with the JSON array, nothing else):
 [
-  {{"sheet_name": "Sheet1", "row_index": 0, "original_name": "Ventas", "mapped_to": "Revenue", "confidence": 0.95}},
-  {{"sheet_name": "Sheet1", "row_index": 1, "original_name": "Total", "mapped_to": "IGNORE", "confidence": 1.0}}
+  {{"sheet_name": "Sheet1", "row_index": 0, "original_name": "Importe neto de la cifra de negocios", "mapped_to": "Revenue", "confidence": 0.95}},
+  {{"sheet_name": "Sheet1", "row_index": 1, "original_name": "Margen EBITDA", "mapped_to": "IGNORE", "confidence": 1.0}}
 ]
 """
 
