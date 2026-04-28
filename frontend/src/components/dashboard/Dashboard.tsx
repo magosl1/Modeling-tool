@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { projectsApi, sharingApi } from '../../services/api'
+import { authApi, projectsApi, sharingApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import type { Project } from '../../types/api'
 import toast from 'react-hot-toast'
@@ -16,6 +16,12 @@ export default function Dashboard() {
   const { logout } = useAuthStore()
   const navigate = useNavigate()
   const qc = useQueryClient()
+
+  const { data: me } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => authApi.me().then(r => r.data),
+  })
+  const isAdmin = me?.role === 'admin' || me?.role === 'master_admin'
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -51,6 +57,11 @@ export default function Dashboard() {
             <button onClick={() => navigate('/settings/ai')} className="btn-secondary" title="AI Settings">
               ⚙️ AI
             </button>
+            {isAdmin && (
+              <button onClick={() => navigate('/admin')} className="btn-secondary" title="Admin">
+                Admin
+              </button>
+            )}
             <button onClick={() => navigate('/profile')} className="btn-secondary" title="Profile">
               Profile
             </button>

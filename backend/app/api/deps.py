@@ -98,6 +98,33 @@ def get_project_for_write(project_id: str, user: User, db: Session):
     return _fetch_project_with_access(project_id, user, db, require_write=True)
 
 
+_ROLE_RANK = {"user": 0, "admin": 1, "master_admin": 2}
+
+
+def _role_at_least(user: User, minimum: str) -> bool:
+    return _ROLE_RANK.get(user.role, 0) >= _ROLE_RANK[minimum]
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Allow admin or master_admin only."""
+    if not _role_at_least(current_user, "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user
+
+
+def require_master_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Allow master_admin only — used for role mutations / deactivation."""
+    if not _role_at_least(current_user, "master_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Master admin role required",
+        )
+    return current_user
+
+
 def get_project_for_owner(project_id: str, user: User, db: Session):
     """Owner-only access. Used for management actions (sharing, deletion).
 

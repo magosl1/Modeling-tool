@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    admin,
     ai_settings,
     assumptions,
     auth,
@@ -116,6 +117,9 @@ app.include_router(consolidated.router, prefix=settings.API_V1_STR)
 
 # AI Settings (user API keys for AI ingestion)
 app.include_router(ai_settings.router, prefix=settings.API_V1_STR)
+
+# Admin — usage stats and user management (Fase 0.5.2)
+app.include_router(admin.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")

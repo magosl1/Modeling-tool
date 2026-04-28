@@ -45,6 +45,7 @@ class UserOut(BaseModel):
     email: str
     name: str
     auth_provider: str
+    role: str = "user"
     created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

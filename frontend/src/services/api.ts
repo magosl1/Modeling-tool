@@ -50,7 +50,7 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: LoginRequest): Promise<AxiosResponse<AuthTokens>> =>
     api.post('/auth/login', data),
-  me: (): Promise<AxiosResponse<{ id: string; email: string; name: string; auth_provider: string; created_at?: string }>> =>
+  me: (): Promise<AxiosResponse<{ id: string; email: string; name: string; auth_provider: string; role: string; created_at?: string }>> =>
     api.get('/auth/me'),
   changePassword: (data: { current_password: string; new_password: string }): Promise<AxiosResponse<AuthTokens>> =>
     api.post('/auth/change-password', data),
@@ -231,6 +231,54 @@ export const curvesApi = {
   get: (projectId: string) => api.get(`/projects/${projectId}/curves`),
   save: (projectId: string, data: Record<string, { is_percentage: boolean, values: Record<string, number> }>) => 
     api.put(`/projects/${projectId}/curves`, data),
+}
+
+// Admin — usage stats and user management
+export interface AdminStats {
+  users_total: number
+  users_active: number
+  users_new_30d: number
+  users_admins: number
+  users_master_admins: number
+  projects_total: number
+  projects_by_status: Record<string, number>
+  projects_new_30d: number
+  entities_total: number
+  entities_by_type: Record<string, number>
+  historical_rows: number
+  uploads_total: number
+  uploads_validated: number
+  uploads_rejected: number
+  uploads_pending: number
+  timestamp: string
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  name: string
+  role: 'user' | 'admin' | 'master_admin'
+  auth_provider: string
+  created_at: string
+  deleted_at: string | null
+  project_count: number
+}
+
+export interface AdminUserListResponse {
+  items: AdminUser[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export const adminApi = {
+  stats: (): Promise<AxiosResponse<AdminStats>> => api.get('/admin/stats'),
+  listUsers: (params: { q?: string; role?: string; include_deleted?: boolean; page?: number; page_size?: number } = {}):
+    Promise<AxiosResponse<AdminUserListResponse>> =>
+    api.get('/admin/users', { params }),
+  updateUser: (userId: string, data: { role?: 'user' | 'admin' | 'master_admin'; deactivate?: boolean }):
+    Promise<AxiosResponse<AdminUser>> =>
+    api.patch(`/admin/users/${userId}`, data),
 }
 
 // AI Settings — user API keys for AI ingestion

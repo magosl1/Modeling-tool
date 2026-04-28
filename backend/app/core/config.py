@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     AI_KEYS_ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting user API keys
     ENABLE_AI_INGESTION: bool = True
 
+    # Master admin bootstrap. When set, the user with this email is promoted
+    # to role="master_admin" on register/login. Leave empty in environments
+    # that do not need a master admin.
+    MASTER_ADMIN_EMAIL: Optional[str] = None
+
     # CORS — comma-separated list of allowed origins.
     # In DEBUG, defaults to common local dev ports; in production, MUST be set
     # explicitly to your frontend origin(s).

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -14,6 +15,17 @@ from app.core.security import (
 )
 from app.db.base import get_db
 from app.models.user import User
+
+
+def _promote_if_master_admin(user: User, db: Session) -> None:
+    """Promote the user to master_admin if their email matches the configured
+    MASTER_ADMIN_EMAIL. Idempotent. Called on login + register."""
+    target = (settings.MASTER_ADMIN_EMAIL or "").strip().lower()
+    if not target:
+        return
+    if user.email.lower() == target and user.role != "master_admin":
+        user.role = "master_admin"
+        db.commit()
 from app.schemas.auth import (
     ChangePasswordRequest,
     DeleteAccountRequest,
@@ -41,6 +53,7 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    _promote_if_master_admin(user, db)
     return TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
@@ -54,6 +67,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if user.deleted_at is not None:
         raise HTTPException(status_code=401, detail="Account deactivated")
+    _promote_if_master_admin(user, db)
     return TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),

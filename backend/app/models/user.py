@@ -19,6 +19,13 @@ class User(Base):
         SAEnum("email", "google", "microsoft", name="auth_provider_enum"),
         default="email"
     )
+    role: Mapped[str] = mapped_column(
+        SAEnum("user", "admin", "master_admin", name="user_role_enum"),
+        nullable=False,
+        default="user",
+        server_default="user",
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
