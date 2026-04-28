@@ -25,3 +25,15 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc)
     )
+
+    # Tokens issued before this timestamp are considered invalid. Bumped on
+    # password change so old JWTs cannot be used after a credential rotation.
+    password_changed_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    # Soft-delete: when set, the user can no longer authenticate; data is
+    # retained for audit/recovery until a separate purge job runs.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

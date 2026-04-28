@@ -50,6 +50,12 @@ export const authApi = {
     api.post('/auth/register', data),
   login: (data: LoginRequest): Promise<AxiosResponse<AuthTokens>> =>
     api.post('/auth/login', data),
+  me: (): Promise<AxiosResponse<{ id: string; email: string; name: string; auth_provider: string; created_at?: string }>> =>
+    api.get('/auth/me'),
+  changePassword: (data: { current_password: string; new_password: string }): Promise<AxiosResponse<AuthTokens>> =>
+    api.post('/auth/change-password', data),
+  deleteAccount: (data: { email_confirmation: string; password: string }): Promise<AxiosResponse<void>> =>
+    api.delete('/auth/me', { data }),
 }
 
 // Projects

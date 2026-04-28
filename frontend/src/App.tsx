@@ -4,6 +4,7 @@ import ErrorBoundary from './components/common/ErrorBoundary'
 import LoginPage from './components/auth/LoginPage'
 import RegisterPage from './components/auth/RegisterPage'
 import AISettingsPanel from './components/auth/AISettingsPanel'
+import ProfilePage from './components/auth/ProfilePage'
 import Dashboard from './components/dashboard/Dashboard'
 import ProjectSetup from './components/project/ProjectSetup'
 import ProjectWorkspace from './components/project/ProjectWorkspace'
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
         <Route path="/settings/ai" element={<PrivateRoute><AISettingsPanel /></PrivateRoute>} />
         <Route path="/projects/new" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
         {/*

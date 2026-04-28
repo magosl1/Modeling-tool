@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { historicalApi } from '../../services/api'
@@ -8,10 +8,9 @@ import { CheckCircleIcon, ExclamationCircleIcon, DocumentIcon, SparklesIcon, XMa
 
 interface Props { projectId: string; project: Project; entityId?: string; onComplete?: () => void }
 
-export default function AIIngestionWizard({ projectId, project, entityId, onComplete }: Props) {
+export default function AIIngestionWizard({ projectId, entityId, onComplete }: Props) {
   const qc = useQueryClient()
   const [ingestData, setIngestData] = useState<AIIngestionResponse | null>(null)
-  const [isConfirming, setIsConfirming] = useState(false)
 
   const { data: historical } = useQuery<HistoricalResponse>({
     queryKey: ['historical', projectId, entityId],
@@ -274,11 +273,14 @@ export default function AIIngestionWizard({ projectId, project, entityId, onComp
                         {items.map(item => (
                           <tr key={item} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-2 font-medium text-gray-900 max-w-[200px] truncate" title={item}>{item}</td>
-                            {stmtYears.map(y => (
-                              <td key={y} className="px-4 py-2 text-right text-gray-600 font-mono text-xs">
-                                {stmtData[item][y] ? Number(stmtData[item][y]).toLocaleString() : '-'}
-                              </td>
-                            ))}
+                            {stmtYears.map(y => {
+                              const raw = stmtData[item]?.[Number(y)]
+                              return (
+                                <td key={y} className="px-4 py-2 text-right text-gray-600 font-mono text-xs">
+                                  {raw ? Number(raw).toLocaleString() : '-'}
+                                </td>
+                              )
+                            })}
                           </tr>
                         ))}
                       </tbody>

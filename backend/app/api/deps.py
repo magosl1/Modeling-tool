@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -17,9 +19,37 @@ def get_current_user(
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
     user = db.query(User).filter(User.id == payload["sub"]).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account deactivated",
+        )
+
+    # Reject tokens issued before the user's last password change.
+    iat = payload.get("iat")
+    if iat is not None and user.password_changed_at is not None:
+        try:
+            iat_dt = datetime.fromtimestamp(int(iat), tz=timezone.utc)
+        except (TypeError, ValueError):
+            iat_dt = None
+        if iat_dt is not None:
+            pwd_changed = user.password_changed_at
+            if pwd_changed.tzinfo is None:
+                pwd_changed = pwd_changed.replace(tzinfo=timezone.utc)
+            # python-jose encodes `iat` as integer seconds; truncate the DB
+            # timestamp to the same resolution so a same-second emit/change
+            # comparison stays inclusive.
+            if iat_dt < pwd_changed.replace(microsecond=0):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token expired due to password change",
+                )
+
     return user
 
 
