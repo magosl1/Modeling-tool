@@ -98,9 +98,10 @@ export const historicalApi = {
     form.append('file', file)
     return api.post(`/projects/${projectId}/upload/historical`, form)
   },
-  uploadAI: (projectId: string, file: File): Promise<AxiosResponse<AIIngestionResponse>> => {
+  uploadAI: (projectId: string, file: File, entityId?: string): Promise<AxiosResponse<AIIngestionResponse>> => {
     const form = new FormData()
     form.append('file', file)
+    if (entityId) form.append('entity_id', entityId)
     return api.post(`/projects/${projectId}/upload-ai`, form)
   },
   saveJSON: (projectId: string, data: { parsed: any; years: number[]; entity_id?: string }): Promise<AxiosResponse<{ message: string }>> =>

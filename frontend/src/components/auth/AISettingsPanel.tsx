@@ -139,7 +139,11 @@ export default function AISettingsPanel() {
               </div>
               <div>
                 <span className="text-gray-500">API Key:</span>
-                <p className="font-mono font-medium">{existing.api_key_masked}</p>
+                <p className="font-mono font-medium">
+                  {existing.has_key
+                    ? `••••••••${existing.key_last4 || ''}`
+                    : 'Not configured'}
+                </p>
               </div>
               <div>
                 <span className="text-gray-500">Models:</span>

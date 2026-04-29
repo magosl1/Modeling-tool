@@ -270,7 +270,8 @@ export interface AISettingsUpdate {
 
 export interface AISettingsOut {
   provider: string
-  api_key_masked: string
+  has_key: boolean
+  key_last4: string
   cheap_model: string
   smart_model: string
   created_at: string

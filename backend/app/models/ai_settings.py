@@ -24,6 +24,9 @@ class UserAISettings(Base):
         nullable=False, default="google",
     )
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    # Last 4 chars of the plain key, stored separately so we can render a
+    # masked preview without ever decrypting the key on a read path.
+    api_key_last4: Mapped[str] = mapped_column(String(4), nullable=False, default="")
     cheap_model: Mapped[str] = mapped_column(
         String(100), nullable=False, default="gemini-2.5-flash"
     )

@@ -14,13 +14,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.core.encryption import decrypt_api_key, encrypt_api_key, mask_api_key
+from app.core.encryption import encrypt_api_key
 from app.db.base import get_db
 from app.models.ai_settings import UserAISettings
 from app.models.user import User
 from app.schemas.ai_settings import AISettingsOut, AISettingsTestResult, AISettingsUpdate
 
 router = APIRouter(prefix="/me", tags=["ai-settings"])
+
+
+def _to_out(row: UserAISettings) -> AISettingsOut:
+    """Build the public response. NEVER decrypts the stored key."""
+    return AISettingsOut(
+        provider=row.provider,
+        has_key=bool(row.api_key_encrypted),
+        key_last4=(row.api_key_last4 or "")[-4:],
+        cheap_model=row.cheap_model,
+        smart_model=row.smart_model,
+        created_at=row.created_at.isoformat(),
+        updated_at=row.updated_at.isoformat(),
+    )
 
 
 @router.get("/ai-settings", response_model=AISettingsOut)
@@ -31,15 +44,7 @@ def get_ai_settings(
     row = db.query(UserAISettings).filter(UserAISettings.user_id == user.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="AI settings not configured")
-    plain_key = decrypt_api_key(row.api_key_encrypted)
-    return AISettingsOut(
-        provider=row.provider,
-        api_key_masked=mask_api_key(plain_key),
-        cheap_model=row.cheap_model,
-        smart_model=row.smart_model,
-        created_at=row.created_at.isoformat(),
-        updated_at=row.updated_at.isoformat(),
-    )
+    return _to_out(row)
 
 
 @router.put("/ai-settings", response_model=AISettingsOut)
@@ -55,6 +60,7 @@ def upsert_ai_settings(
         row.provider = data.provider
         if key_changed:
             row.api_key_encrypted = encrypt_api_key(data.api_key)
+            row.api_key_last4 = data.api_key[-4:] if len(data.api_key) >= 4 else data.api_key
         row.cheap_model = data.cheap_model
         row.smart_model = data.smart_model
     else:
@@ -64,21 +70,14 @@ def upsert_ai_settings(
             user_id=user.id,
             provider=data.provider,
             api_key_encrypted=encrypt_api_key(data.api_key),
+            api_key_last4=data.api_key[-4:] if len(data.api_key) >= 4 else data.api_key,
             cheap_model=data.cheap_model,
             smart_model=data.smart_model,
         )
         db.add(row)
     db.commit()
     db.refresh(row)
-    display_key = data.api_key if key_changed else decrypt_api_key(row.api_key_encrypted)
-    return AISettingsOut(
-        provider=row.provider,
-        api_key_masked=mask_api_key(display_key),
-        cheap_model=row.cheap_model,
-        smart_model=row.smart_model,
-        created_at=row.created_at.isoformat(),
-        updated_at=row.updated_at.isoformat(),
-    )
+    return _to_out(row)
 
 
 @router.delete("/ai-settings", status_code=status.HTTP_204_NO_CONTENT)

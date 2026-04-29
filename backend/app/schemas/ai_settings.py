@@ -15,9 +15,14 @@ class AISettingsUpdate(BaseModel):
 
 
 class AISettingsOut(BaseModel):
-    """Response for GET /me/ai-settings.  Key is masked."""
+    """Response for GET /me/ai-settings.
+
+    The plain API key is never returned. The frontend gets `has_key` to render
+    "configured / not configured" UI and `key_last4` for a masked preview.
+    """
     provider: str
-    api_key_masked: str
+    has_key: bool
+    key_last4: str = ""
     cheap_model: str
     smart_model: str
     created_at: str

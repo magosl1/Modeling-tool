@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Body
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Body
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,12 @@ from app.services.historical_validator import (
     parse_historical_excel,
     validate_historical_data,
 )
-from app.services.template_generator import generate_historical_template
+from app.services.template_generator import (
+    BS_ITEMS,
+    CF_ITEMS,
+    PNL_ITEMS,
+    generate_historical_template,
+)
 from app.services.document_extractor import extract_document
 from app.services.ai_mapper import map_document_phase1, map_document_phase2
 from app.services.complexity_detector import evaluate_complexity
@@ -26,6 +31,37 @@ router = APIRouter(prefix="/projects", tags=["historical"])
 log = get_logger("app.api.historical")
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+# Canonical line-item whitelist used to reject mass-assignment via /save-json.
+_CANONICAL_PNL = {item[0] if isinstance(item, tuple) else item for item in PNL_ITEMS}
+_CANONICAL_BS = {item[0] if isinstance(item, tuple) else item for item in BS_ITEMS}
+_CANONICAL_CF = {item[0] if isinstance(item, tuple) else item for item in CF_ITEMS}
+
+
+def _resolve_entity_for_project(project_id: str, entity_id: str | None, db: Session) -> str:
+    """Return a valid entity_id that belongs to the given project.
+
+    - If entity_id is provided, verify it exists AND belongs to project_id.
+      Mismatches are returned as 404 (not 403) to avoid disclosing whether
+      the entity exists in another project.
+    - If entity_id is None, fall back to the project's default entity.
+    """
+    from app.models.entity import Entity
+
+    if entity_id:
+        entity = (
+            db.query(Entity)
+            .filter(Entity.id == entity_id, Entity.project_id == project_id)
+            .first()
+        )
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found in this project")
+        return entity.id
+
+    default_entity = db.query(Entity).filter(Entity.project_id == project_id).first()
+    if not default_entity:
+        raise HTTPException(status_code=400, detail="No entity found for this project.")
+    return default_entity.id
 
 
 @router.get("/{project_id}/template/historical")
@@ -191,6 +227,7 @@ async def upload_historical_data(
 async def analyze_historical_ai(
     project_id: str,
     file: UploadFile = File(...),
+    entity_id: str | None = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -206,7 +243,14 @@ async def analyze_historical_ai(
     Does NOT save to DB (wait for human confirmation).
     """
     get_project_or_404(project_id, current_user, db)
+    # If a target entity is provided, verify it belongs to this project up front
+    # so we don't burn LLM tokens analysing a doc that won't be saveable later.
+    if entity_id:
+        _resolve_entity_for_project(project_id, entity_id, db)
     content = await file.read()
+
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB")
 
     import time
     start_time = time.time()
@@ -288,31 +332,57 @@ def save_historical_json(
     }
     """
     project = get_project_for_write(project_id, current_user, db)
-    
+
     parsed = payload.get("parsed", {})
-    years = payload.get("years", [])
-    entity_id = payload.get("entity_id")
-    
-    if not entity_id:
-        # Fallback to the project's default entity if not explicitly passed
-        from app.models.entity import Entity
-        default_entity = db.query(Entity).filter(Entity.project_id == project_id).first()
-        if not default_entity:
-            raise HTTPException(400, "No entity found for this project.")
-        entity_id = default_entity.id
-    
+    if not isinstance(parsed, dict):
+        raise HTTPException(400, "Invalid payload: 'parsed' must be an object.")
+    entity_id = _resolve_entity_for_project(project_id, payload.get("entity_id"), db)
+
     # Store data (delete old first for this entity)
     db.query(HistoricalData).filter(
         HistoricalData.project_id == project_id,
         HistoricalData.entity_id == entity_id
     ).delete()
 
+    canonical_by_stmt = {
+        "PNL": _CANONICAL_PNL,
+        "BS": _CANONICAL_BS,
+        "CF": _CANONICAL_CF,
+    }
+
     def store_statement(data: dict, statement_type: str, bucket_map: dict = None):
+        canonical = canonical_by_stmt[statement_type]
         for line_item, year_vals in data.items():
-            if line_item.startswith("_"):
+            if not isinstance(line_item, str) or line_item.startswith("_"):
+                continue
+            # Reject anything outside the canonical whitelist for this statement.
+            # (Revenue sub-lines bypass this on the legacy /upload route, but the
+            # AI pipeline must commit to the canonical contract.)
+            if line_item not in canonical:
+                log.warning(
+                    "save_json_unknown_line_item",
+                    statement=statement_type,
+                    line_item=line_item[:80],
+                    project_id=project_id,
+                )
+                continue
+            if not isinstance(year_vals, dict):
                 continue
             for year_str, value in year_vals.items():
-                year = int(year_str)
+                try:
+                    year = int(year_str)
+                except (TypeError, ValueError):
+                    continue
+                # Guard against Inf / NaN / non-numeric values that would
+                # corrupt downstream calculations.
+                try:
+                    fval = float(value)
+                except (TypeError, ValueError):
+                    continue
+                import math
+                if math.isnan(fval) or math.isinf(fval):
+                    continue
+
                 bucket = None
                 if bucket_map:
                     bucket = bucket_map.get(line_item)
@@ -324,7 +394,7 @@ def save_historical_json(
                     line_item=line_item,
                     bucket=bucket,
                     year=year,
-                    value=value,
+                    value=fval,
                 ))
 
     bs_buckets = {
