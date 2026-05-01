@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # explicitly to your frontend origin(s).
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
+    # Filesystem location where uploaded historical documents are stored.
+    # Default targets the Docker bind mount at /app/uploads; override via
+    # env (UPLOAD_DIR=...) when running outside Docker.
+    UPLOAD_DIR: str = "/app/uploads"
+
     class Config:
         env_file = ".env"
         extra = "ignore"
