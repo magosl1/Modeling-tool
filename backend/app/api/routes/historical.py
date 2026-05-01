@@ -1,18 +1,18 @@
+import math
 import os
-import shutil
 import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.api.routes.revenue_streams import _sync_revenue_assumptions
+from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.rate_limit import limiter
 from app.db.base import get_db
 from app.models.project import HistoricalData, Project, RevenueStream, UploadedFile
 from app.models.user import User
@@ -37,8 +37,18 @@ log = get_logger("app.api.historical")
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_PROJECT_UPLOAD_BYTES = 50 * 1024 * 1024 # 50 MB total limit per project
-UPLOAD_DIR = "/app/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _ensure_upload_dir() -> str:
+    """Return the configured upload directory, creating it on first call.
+
+    Lazy creation (vs. module-level os.makedirs) keeps imports side-effect-free
+    and prevents app startup from failing when running outside Docker without
+    write permissions on /app/uploads.
+    """
+    upload_dir = settings.UPLOAD_DIR
+    os.makedirs(upload_dir, exist_ok=True)
+    return upload_dir
 
 # Canonical line-item whitelist used to reject mass-assignment via /save-json.
 _CANONICAL_PNL = {item[0] if isinstance(item, tuple) else item for item in PNL_ITEMS}
@@ -246,19 +256,20 @@ async def upload_documents_batch(
         UploadedFile.project_id == project_id
     ).scalar() or 0
 
+    upload_dir = _ensure_upload_dir()
     new_files = []
     for f in files:
         file_bytes = await f.read()
         size = len(file_bytes)
-        
+
         if current_size + size > MAX_PROJECT_UPLOAD_BYTES:
             raise HTTPException(400, "Project upload limit (50MB) exceeded.")
-            
+
         current_size += size
-        
+
         file_id = str(uuid.uuid4())
         ext = os.path.splitext(f.filename)[1] if f.filename else ".txt"
-        local_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
+        local_path = os.path.join(upload_dir, f"{file_id}{ext}")
         
         with open(local_path, "wb") as out:
             out.write(file_bytes)
@@ -343,7 +354,13 @@ async def analyze_document(
     doc = db.query(UploadedFile).filter(UploadedFile.id == doc_id, UploadedFile.project_id == project_id).first()
     if not doc:
         raise HTTPException(404, "Document not found")
-        
+
+    if doc.is_ignored:
+        raise HTTPException(
+            400,
+            "This document is marked as ignored — un-toggle it before requesting analysis.",
+        )
+
     if not doc.file_path or not os.path.exists(doc.file_path):
         raise HTTPException(404, "Physical file missing on server")
 
@@ -496,7 +513,6 @@ def save_historical_json(
                     fval = float(value)
                 except (TypeError, ValueError):
                     continue
-                import math
                 if math.isnan(fval) or math.isinf(fval):
                     continue
 

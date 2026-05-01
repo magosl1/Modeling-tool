@@ -49,3 +49,10 @@ alembic/versions/*.pyc
 *.db
 *.sqlite
 *.sqlite3
+
+# Local upload artifacts
+backend/uploads/
+/uploads/
+
+# Stray test fixtures at repo root (real fixtures live under backend/tests/)
+/dummy.csv
