@@ -268,15 +268,21 @@ class UploadedFile(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", ondelete="CASCADE"))
+    entity_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("entities.id", ondelete="CASCADE"), nullable=True)
     file_type: Mapped[str] = mapped_column(
         SAEnum("historical", "module_template", "external_curve", name="file_type_enum"), nullable=False
     )
     module: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    s3_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     upload_status: Mapped[str] = mapped_column(
         SAEnum("pending", "validated", "rejected", name="upload_status_enum"), nullable=False, default="pending"
     )
+    is_ignored: Mapped[bool] = mapped_column(default=False, nullable=False)
+    ai_analysis_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    missing_inputs_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     validation_errors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

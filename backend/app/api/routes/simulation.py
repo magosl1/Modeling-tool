@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
-from app.api.routes.projections import _load_historical, _transform_assumptions
+from app.services.projections_runner import load_historical, transform_assumptions
 from app.db.base import get_db
 from app.models.project import (
     AssumptionParam,
@@ -55,7 +55,7 @@ def _load_assumptions_for_mc(project_id: str, scenario_id: Optional[str], db: Se
             "projection_method": a.projection_method,
             "params": params,
         })
-    return _transform_assumptions(raw)
+    return transform_assumptions(raw)
 
 
 @router.post("/{project_id}/monte-carlo")
@@ -67,7 +67,7 @@ def run_simulation(
 ):
     project = get_project_for_write(project_id, current_user, db)
 
-    pnl, bs, cf, hist_years = _load_historical(project_id, db)
+    pnl, bs, cf, hist_years = load_historical(project_id, db)
     if not hist_years:
         raise HTTPException(400, "No historical data uploaded")
 

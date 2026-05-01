@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_or_404
-from app.api.routes.projections import _load_historical
+from app.services.projections_runner import load_historical
 from app.db.base import get_db
 from app.models.project import ProjectedFinancial
 from app.models.user import User
@@ -19,7 +19,7 @@ def get_ratios(
 ):
     get_project_or_404(project_id, current_user, db)
     
-    pnl_hist, bs_hist, cf_hist, hist_years = _load_historical(project_id, db)
+    pnl_hist, bs_hist, cf_hist, hist_years = load_historical(project_id, db)
     proj_records = db.query(ProjectedFinancial).filter(ProjectedFinancial.project_id == project_id).all()
     
     # Merge historicals and projections

@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
+from app.models.user_mapping_memory import UserMappingMemory
 from app.services.document_extractor import ExtractedDocument
 from app.services.llm_client import cheap_complete, smart_complete, extract_content
 from app.services.template_generator import BS_ITEMS, CF_ITEMS, PNL_ITEMS
@@ -206,7 +207,31 @@ def map_document_phase1(user_id: str, db: Session, doc: ExtractedDocument) -> li
     if not labels:
         return []
 
-    items_text = json.dumps(labels, indent=2, ensure_ascii=False)
+    # 1. Check memory for known mappings
+    memory = db.query(UserMappingMemory).filter(UserMappingMemory.user_id == user_id).all()
+    memory_dict = {m.original_name: (m.mapped_to, m.confidence) for m in memory}
+    
+    known_mappings = []
+    unknown_labels = []
+    
+    for lbl in labels:
+        name = lbl["original_name"]
+        if name in memory_dict:
+            known_mappings.append({
+                "sheet_name": lbl["sheet_name"],
+                "row_index": lbl["row_index"],
+                "original_name": name,
+                "mapped_to": memory_dict[name][0],
+                "confidence": memory_dict[name][1],
+            })
+        else:
+            unknown_labels.append(lbl)
+
+    if not unknown_labels:
+        log.info("phase1_mapper_all_from_memory", user_id=user_id, count=len(known_mappings))
+        return known_mappings
+
+    items_text = json.dumps(unknown_labels, indent=2, ensure_ascii=False)
     user_block = _wrap_user_data(items_text)
 
     messages = [
@@ -218,24 +243,28 @@ def map_document_phase1(user_id: str, db: Session, doc: ExtractedDocument) -> li
         )},
     ]
 
-    log.info("phase1_mapper_start", user_id=user_id, item_count=len(labels))
+    log.info("phase1_mapper_start", user_id=user_id, unknown_count=len(unknown_labels), known_count=len(known_mappings))
 
-    response = cheap_complete(
-        user_id=user_id,
-        db=db,
-        messages=messages,
-        max_tokens=4096,
-    )
-
-    text = extract_content(response)
-    mappings = _parse_json_from_text(text)
-    
-    if mappings:
-        log.info("phase1_mapper_success", user_id=user_id, mapped_count=len(mappings))
-    else:
-        log.warning("phase1_mapper_no_json", user_id=user_id, response_preview=text[:200] if text else "empty")
-    
-    return mappings
+    try:
+        response = cheap_complete(
+            user_id=user_id,
+            db=db,
+            messages=messages,
+            max_tokens=4096,
+        )
+        text = extract_content(response)
+        llm_mappings = _parse_json_from_text(text)
+        
+        if llm_mappings:
+            log.info("phase1_mapper_success", user_id=user_id, mapped_count=len(llm_mappings))
+        else:
+            log.warning("phase1_mapper_no_json", user_id=user_id, response_preview=text[:200] if text else "empty")
+            
+        return known_mappings + llm_mappings
+    except Exception as e:
+        log.error("phase1_mapper_error", error=str(e))
+        # Si el LLM falla, al menos devolvemos lo que conocemos de memoria
+        return known_mappings
 
 
 def map_document_phase2(user_id: str, db: Session, doc: ExtractedDocument, phase1_mappings: list[dict[str, Any]] = None) -> list[dict[str, Any]]:

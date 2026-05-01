@@ -22,6 +22,7 @@ from app.models.project import (
 )
 from app.models.user import User
 from app.services.projection_engine import ProjectionEngine
+from app.services.projections_runner import load_historical, transform_assumptions
 
 router = APIRouter(prefix="/projects", tags=["scenarios"])
 
@@ -111,28 +112,11 @@ def _clone_assumptions(src_scenario_id: Optional[str], dst_scenario_id: str,
             ))
 
 
-def _load_historical(project_id: str, db: Session) -> tuple:
-    records = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).all()
-    pnl, bs, cf = {}, {}, {}
-    years = set()
-    for r in records:
-        val = Decimal(str(r.value))
-        if r.statement_type in ("BS", "CF"):
-            val = abs(val)
-        years.add(r.year)
-        if r.statement_type == "PNL":
-            pnl.setdefault(r.line_item, {})[r.year] = val
-        elif r.statement_type == "BS":
-            bs.setdefault(r.line_item, {})[r.year] = val
-        elif r.statement_type == "CF":
-            cf.setdefault(r.line_item, {})[r.year] = val
-    return pnl, bs, cf, sorted(years)
 
 
 def _load_assumptions_for_scenario(project_id: str, scenario_id: Optional[str],
                                    db: Session) -> dict:
     """Load assumptions for a given scenario (None = base/legacy)."""
-    from app.api.routes.projections import _transform_assumptions
     assumptions_db = db.query(ProjectionAssumption).filter(
         ProjectionAssumption.project_id == project_id,
         ProjectionAssumption.scenario_id == scenario_id,
@@ -146,7 +130,7 @@ def _load_assumptions_for_scenario(project_id: str, scenario_id: Optional[str],
             "projection_method": a.projection_method,
             "params": params,
         })
-    return _transform_assumptions(raw)
+    return transform_assumptions(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +208,7 @@ def run_scenario(
     project = get_project_for_write(project_id, current_user, db)
     scenario = _get_scenario_or_404(scenario_id, project_id, db)
 
-    pnl, bs, cf, hist_years = _load_historical(project_id, db)
+    pnl, bs, cf, hist_years = load_historical(project_id, db)
     if not hist_years:
         raise HTTPException(400, "No historical data uploaded")
 

@@ -20,8 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import settings
 from app.db.base import Base
+from app.models.entity import Entity # noqa: F401
 from app.models import project as _project_models  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.user_mapping_memory import UserMappingMemory # noqa: F401
 
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 

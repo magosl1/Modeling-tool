@@ -315,3 +315,15 @@ export interface AIIngestionResponse {
     stats: Record<string, any>
   }
 }
+
+export interface UploadedDocument {
+  id: string
+  filename: string
+  size: number
+  status: 'pending' | 'validated' | 'rejected'
+  is_ignored: boolean
+  has_analysis: boolean
+  missing_inputs: string[] | null
+  entity_id: string | null
+  ai_analysis: AIIngestionResponse | null
+}

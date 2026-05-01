@@ -9,13 +9,12 @@ import {
   SparklesIcon,
   XMarkIcon,
   TableCellsIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
+  ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline'
 
 import { entitiesApi, historicalApi } from '../../services/api'
 import { ALL_CANONICAL, statementOf, type CanonicalStatement } from '../../lib/canonicalItems'
-import type { Project, AIIngestionResponse, HistoricalResponse } from '../../types/api'
+import type { Project, AIIngestionResponse, UploadedDocument } from '../../types/api'
 
 interface Props {
   projectId: string
@@ -26,7 +25,12 @@ interface Props {
 
 type Mapping = AIIngestionResponse['mappings'][number]
 
-/** Dropdown choices: every canonical line + the IGNORE sentinel. */
+const UNIT_OPTIONS = [
+  { value: 1, label: 'Units' },
+  { value: 1000, label: 'Thousands (k)' },
+  { value: 1000000, label: 'Millions (M)' },
+]
+
 const TARGET_OPTIONS: Array<{ value: string; label: string; group: string }> = [
   { value: 'IGNORE', label: 'IGNORE — drop this row', group: 'Ignore' },
   ...ALL_CANONICAL.map((c) => ({
@@ -53,16 +57,12 @@ function applyOverrides(
   baseMappings: Mapping[],
   overrides: Record<number, string>,
 ): AIIngestionResponse['parsed'] {
-  // Build a fresh parsed structure where mapping decisions reflect the
-  // current user-edited overrides. Only line items that the AI already
-  // produced numeric values for can be moved (we don't re-run extraction
-  // client-side — values come from `base`).
   const result: AIIngestionResponse['parsed'] = { PNL: {}, BS: {}, CF: {} }
 
   const valuesByOriginal: Record<string, Record<string, number>> = {}
   for (const stmtKey of ['PNL', 'BS', 'CF'] as CanonicalStatement[]) {
     for (const [item, years] of Object.entries(base[stmtKey] || {})) {
-      valuesByOriginal[item] = years
+      valuesByOriginal[item] = years as Record<string, number>
     }
   }
 
@@ -71,9 +71,6 @@ function applyOverrides(
     if (!target || target === 'IGNORE') return
     const stmt = statementOf(target)
     if (!stmt) return
-    // Find the values this row contributed to in the original parsed output.
-    // The applier keys parsed by the *original* canonical name, so for moved
-    // rows we have to look up by the original mapped_to (if it exists).
     const sourceKey = m.mapped_to !== 'IGNORE' && valuesByOriginal[m.mapped_to]
       ? m.mapped_to
       : null
@@ -179,440 +176,318 @@ function ReviewMappingsTable({
   )
 }
 
-export default function AIIngestionWizard({ projectId, entityId: presetEntityId, onComplete }: Props) {
+export default function DocumentManager({ projectId, entityId: presetEntityId, onComplete }: Props) {
   const qc = useQueryClient()
-  const [ingestData, setIngestData] = useState<AIIngestionResponse | null>(null)
-
-  // When the wizard is opened from project-wide context (no presetEntityId),
-  // the user picks the destination entity here. If a preset entity is passed
-  // (entity workspace), we honour it but still show it for clarity.
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [selectedEntityId, setSelectedEntityId] = useState<string>(presetEntityId || '')
-  const [overrides, setOverrides] = useState<Record<number, string>>({})
-  const [showIgnored, setShowIgnored] = useState(false)
+  
+  // Mapping overrides keyed by docId -> rowIndex -> override
+  const [overrides, setOverrides] = useState<Record<string, Record<number, string>>>({})
+  
+  const [unitMultiplier, setUnitMultiplier] = useState<number>(1)
+  const [excludedYears, setExcludedYears] = useState<Set<string>>(new Set())
 
   const { data: entities = [] } = useQuery({
     queryKey: ['entities', projectId],
-    queryFn: () => entitiesApi.list(projectId).then((r) => r.data),
+    queryFn: () => entitiesApi.list(projectId).then(r => r.data),
   })
 
-  // Auto-select the first entity if none is preselected and entities loaded.
-  if (!selectedEntityId && entities.length > 0 && !presetEntityId) {
-    // setState during render is tolerated by React because we guard on the
-    // condition. The next render will see the new value and avoid the loop.
-    setSelectedEntityId(entities[0].id)
-  }
-
-  const { data: historical } = useQuery<HistoricalResponse>({
-    queryKey: ['historical', projectId, selectedEntityId],
-    queryFn: () =>
-      selectedEntityId
-        ? historicalApi.getEntityHistorical(selectedEntityId).then((r) => r.data)
-        : historicalApi.getData(projectId).then((r) => r.data),
+  const { data: documents = [], isLoading: loadingDocs } = useQuery({
+    queryKey: ['documents', projectId],
+    queryFn: () => historicalApi.getDocuments(projectId).then(r => r.data),
   })
 
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => historicalApi.uploadAI(projectId, file, selectedEntityId || undefined),
-    onSuccess: (res) => {
-      setIngestData(res.data)
-      setOverrides({})
-      if (res.data.validation_errors.length > 0) {
-        toast.error(`Found ${res.data.validation_errors.length} validation issues — review and edit before saving.`)
-      } else {
-        toast.success('AI Analysis complete!')
-      }
-    },
-    onError: (err: any) => {
-      const detail = err.response?.data?.detail
-      const customError = err.response?.data?.error?.message
-      const msg = customError || detail || 'AI Upload failed'
-      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
-    },
-  })
-
-  const editedParsed = useMemo(() => {
-    if (!ingestData) return null
-    if (Object.keys(overrides).length === 0) return ingestData.parsed
-    return applyOverrides(ingestData.parsed, ingestData.mappings, overrides)
-  }, [ingestData, overrides])
-
-  const saveMutation = useMutation({
-    mutationFn: () => {
-      if (!ingestData || !editedParsed) throw new Error('no data')
-      return historicalApi.saveJSON(projectId, {
-        parsed: editedParsed,
-        years: ingestData.years,
-        entity_id: selectedEntityId || undefined,
-      })
-    },
+  const uploadBatch = useMutation({
+    mutationFn: (files: File[]) => historicalApi.batchUpload(projectId, files, selectedEntityId || undefined),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['historical', projectId] })
-      if (selectedEntityId) qc.invalidateQueries({ queryKey: ['historical', projectId, selectedEntityId] })
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('Historical data persisted successfully!')
-      setIngestData(null)
-      setOverrides({})
-      if (onComplete) onComplete()
+      toast.success('Documents uploaded')
+      qc.invalidateQueries({ queryKey: ['documents', projectId] })
     },
     onError: (err: any) => {
-      const detail = err.response?.data?.detail
-      toast.error(typeof detail === 'string' ? detail : 'Failed to save validated data')
-    },
+      toast.error(err.response?.data?.detail || 'Failed to upload documents')
+    }
   })
-
-  const onDrop = useCallback(
-    (acceptedFiles: File[], fileRejections: any[]) => {
-      if (!selectedEntityId) {
-        toast.error('Pick a target entity first.')
-        return
-      }
-      if (acceptedFiles[0]) {
-        uploadMutation.mutate(acceptedFiles[0])
-      } else if (fileRejections.length > 0) {
-        toast.error('File type not supported. Please upload a valid Excel, PDF, or CSV file.')
-      }
-    },
-    [uploadMutation, selectedEntityId],
-  )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    maxFiles: 1,
+    onDrop: (files) => uploadBatch.mutate(files)
   })
 
-  // ---------------------------------------------------------------------
-  // REVIEW SCREEN
-  // ---------------------------------------------------------------------
-  if (ingestData && editedParsed) {
-    const { years, validation_errors, ai_stats, mappings } = ingestData
-    const hasErrors = validation_errors.length > 0
-    const ignoredMappings = mappings.filter(
-      (m, i) => (overrides[i] ?? m.mapped_to) === 'IGNORE',
-    )
-    const targetEntityName =
-      entities.find((e) => e.id === selectedEntityId)?.name || '(default entity)'
+  const toggleDoc = useMutation({
+    mutationFn: ({ id, is_ignored }: { id: string, is_ignored: boolean }) => historicalApi.toggleDocument(projectId, id, is_ignored),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['documents', projectId] })
+  })
 
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <SparklesIcon className="w-6 h-6 text-indigo-500" />
-              AI Extraction Review
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Saving to entity: <span className="font-semibold">{targetEntityName}</span> ·
-              {' '}edit mappings below before persisting.
-            </p>
-          </div>
-          <button
-            onClick={() => { setIngestData(null); setOverrides({}) }}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+  const analyzeDoc = useMutation({
+    mutationFn: (id: string) => historicalApi.analyzeDocument(projectId, id),
+    onSuccess: () => {
+      toast.success('Analysis complete')
+      qc.invalidateQueries({ queryKey: ['documents', projectId] })
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || 'Analysis failed')
+    }
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (data: { parsed: any; years: number[]; entity_id?: string }) => historicalApi.saveJSON(projectId, data),
+    onSuccess: () => {
+      toast.success('Consolidated data saved successfully')
+      onComplete?.()
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || 'Failed to save data')
+    }
+  })
+
+  const selectedDoc = documents.find(d => d.id === selectedDocId)
+
+  const handleConsolidate = () => {
+    // Merge all active documents
+    const activeDocs = documents.filter(d => !d.is_ignored && d.has_analysis && d.ai_analysis)
+    if (!activeDocs.length) {
+      toast.error('No analyzed documents selected for consolidation')
+      return
+    }
+
+    const mergedParsed: any = { PNL: {}, BS: {}, CF: {} }
+    const mergedYears = new Set<number>()
+
+    activeDocs.forEach(doc => {
+      const docOverrides = overrides[doc.id] || {}
+      const finalParsed = applyOverrides(doc.ai_analysis!.parsed, doc.ai_analysis!.mappings, docOverrides)
+      
+      // Merge
+      for (const stmt of ['PNL', 'BS', 'CF'] as const) {
+        for (const [item, yearsDict] of Object.entries(finalParsed[stmt] || {})) {
+          if (!mergedParsed[stmt][item]) mergedParsed[stmt][item] = {}
+          for (const [yearStr, val] of Object.entries(yearsDict)) {
+            if (excludedYears.has(yearStr)) continue
+            mergedYears.add(Number(yearStr))
+            const rawVal = val as number
+            // apply multiplier
+            const finalVal = rawVal * unitMultiplier
+            mergedParsed[stmt][item][yearStr] = finalVal // overwrite if duplicate
+          }
+        }
+      }
+    })
+
+    saveMutation.mutate({
+      parsed: mergedParsed,
+      years: Array.from(mergedYears).sort((a, b) => a - b),
+      entity_id: selectedEntityId || undefined
+    })
+  }
+
+  // Calculate globally missing items
+  const globalMissing = useMemo(() => {
+    const activeDocs = documents.filter(d => !d.is_ignored && d.has_analysis)
+    const allFound = new Set<string>()
+    activeDocs.forEach(d => {
+      if (d.ai_analysis?.parsed.PNL && Object.keys(d.ai_analysis.parsed.PNL).length) allFound.add('PNL (Income Statement)')
+      if (d.ai_analysis?.parsed.BS && Object.keys(d.ai_analysis.parsed.BS).length) allFound.add('Balance Sheet')
+      if (d.ai_analysis?.parsed.CF && Object.keys(d.ai_analysis.parsed.CF).length) allFound.add('Cash Flow')
+    })
+    const needed = ['PNL (Income Statement)', 'Balance Sheet', 'Cash Flow']
+    return needed.filter(n => !allFound.has(n))
+  }, [documents])
+
+  return (
+    <div className="flex flex-col h-[80vh] border rounded-lg bg-white overflow-hidden shadow-sm">
+      {/* Header toolbar */}
+      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between shrink-0">
+        <div>
+          <h2 className="text-lg font-medium text-gray-900">Document Manager</h2>
+          <p className="text-sm text-gray-500">Upload, analyze, and consolidate financial statements.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          {!presetEntityId && entities.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Target Entity:</span>
+              <select
+                value={selectedEntityId}
+                onChange={(e) => setSelectedEntityId(e.target.value)}
+                className="input text-sm py-1 max-w-[200px]"
+              >
+                <option value="">(Project Level)</option>
+                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+          )}
+          <select
+            value={unitMultiplier}
+            onChange={(e) => setUnitMultiplier(Number(e.target.value))}
+            className="input text-sm py-1"
           >
-            <XMarkIcon className="w-6 h-6" />
+            {UNIT_OPTIONS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </select>
+          <button
+            onClick={handleConsolidate}
+            disabled={saveMutation.isPending || !documents.some(d => !d.is_ignored && d.has_analysis)}
+            className="btn btn-primary shadow-sm shadow-indigo-200"
+          >
+            {saveMutation.isPending ? 'Saving...' : 'Consolidate & Save'}
           </button>
         </div>
+      </div>
 
-        {/* AI Stats Banner */}
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex gap-4">
-          <SparklesIcon className="w-8 h-8 text-indigo-500 shrink-0" />
-          <div>
-            <h4 className="text-sm font-semibold text-indigo-900">AI Analysis Summary</h4>
-            <p className="text-sm text-indigo-700 mt-1">
-              {ai_stats.phase2_used
-                ? 'Document was highly complex. Automatically routed to Smart Model (Phase 2).'
-                : 'Document processed quickly using standard extraction.'}
-            </p>
-            {ai_stats.reasons.length > 0 && (
-              <ul className="list-disc list-inside text-xs text-indigo-600 mt-2">
-                {ai_stats.reasons.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Panel: Document List */}
+        <div className="w-1/3 border-r bg-gray-50/50 flex flex-col shrink-0">
+          <div className="p-4 border-b">
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                isDragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400 bg-white'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <ArrowUpTrayIcon className="w-6 h-6 mx-auto text-indigo-500 mb-2" />
+              <p className="text-sm font-medium text-gray-700">Drop files or click to upload</p>
+              <p className="text-xs text-gray-500 mt-1">Excel, CSV, PDF (Max 50MB total)</p>
+            </div>
+          </div>
+
+          <div className="p-3 border-b bg-amber-50">
+            <h4 className="text-xs font-semibold text-amber-800 flex items-center gap-1 uppercase tracking-wide">
+              <ExclamationCircleIcon className="w-4 h-4" /> Global Model Status
+            </h4>
+            {globalMissing.length === 0 ? (
+              <p className="text-xs text-amber-700 mt-1">All core statements present across active documents.</p>
+            ) : (
+              <p className="text-xs text-amber-700 mt-1">Missing: <span className="font-medium">{globalMissing.join(', ')}</span></p>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
+            {loadingDocs ? (
+              <div className="p-4 text-center text-sm text-gray-500 animate-pulse">Loading documents...</div>
+            ) : documents.length === 0 ? (
+              <div className="p-4 text-center text-sm text-gray-500 italic">No documents uploaded yet.</div>
+            ) : (
+              documents.map(doc => (
+                <div
+                  key={doc.id}
+                  onClick={() => setSelectedDocId(doc.id)}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                    selectedDocId === doc.id
+                      ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500 shadow-sm'
+                      : 'border-gray-200 bg-white hover:border-indigo-300'
+                  } ${doc.is_ignored ? 'opacity-60 grayscale' : ''}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <DocumentIcon className={`w-5 h-5 shrink-0 ${doc.is_ignored ? 'text-gray-400' : 'text-indigo-500'}`} />
+                      <span className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>{doc.filename}</span>
+                    </div>
+                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={!doc.is_ignored}
+                        onChange={(e) => toggleDoc.mutate({ id: doc.id, is_ignored: !e.target.checked })}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Use</span>
+                    </label>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <span className="text-gray-500">{(doc.size / 1024 / 1024).toFixed(1)} MB</span>
+                    {doc.has_analysis ? (
+                      <span className="flex items-center gap-1 text-green-600 font-medium bg-green-50 px-1.5 py-0.5 rounded border border-green-100">
+                        <CheckCircleIcon className="w-3 h-3" /> Analyzed
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">Pending</span>
+                    )}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
 
-        {/* Validation Errors */}
-        {hasErrors && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-red-800 flex items-center gap-2 mb-2">
-              <ExclamationCircleIcon className="w-5 h-5" />
-              Validation Issues ({validation_errors.length})
-            </h4>
-            <p className="text-xs text-red-700 mb-2">
-              You can fix these by re-mapping rows below, or save anyway and edit the project later.
-            </p>
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-              {validation_errors.map((e, i) => (
-                <div key={i} className="text-sm bg-white border border-red-100 rounded p-2 text-red-700 shadow-sm">
-                  <span className="font-semibold">[{e.tab}] {e.line_item}</span>{' '}
-                  {e.year ? `(Year ${e.year})` : ''}: {e.message}
+        {/* Right Panel: Document Details & Analysis */}
+        <div className="flex-1 overflow-y-auto bg-white flex flex-col">
+          {selectedDoc ? (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-medium text-gray-900">{selectedDoc.filename}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{(selectedDoc.size / 1024 / 1024).toFixed(2)} MB</p>
                 </div>
-              ))}
+                {!selectedDoc.has_analysis && (
+                  <button
+                    onClick={() => analyzeDoc.mutate(selectedDoc.id)}
+                    disabled={analyzeDoc.isPending || selectedDoc.is_ignored}
+                    className="btn btn-secondary flex items-center gap-2"
+                  >
+                    <SparklesIcon className="w-4 h-4 text-indigo-500" />
+                    {analyzeDoc.isPending ? 'Analyzing...' : 'Run AI Analysis'}
+                  </button>
+                )}
+              </div>
+
+              {selectedDoc.is_ignored && (
+                <div className="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-start gap-3">
+                  <XMarkIcon className="w-5 h-5 text-gray-400" />
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-800">Document is ignored</h4>
+                    <p className="text-sm text-gray-500 mt-1">Check "Use" in the left panel to include it in the consolidated project model.</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedDoc.has_analysis && selectedDoc.ai_analysis && (
+                <div className="space-y-6">
+                  {/* Analysis Summary */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="card">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <TableCellsIcon className="w-4 h-4" /> Detected
+                      </h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {['PNL', 'BS', 'CF'].map(stmt => {
+                          const hasData = Object.keys(selectedDoc.ai_analysis!.parsed[stmt as 'PNL'] || {}).length > 0
+                          return hasData ? (
+                            <span key={stmt} className="inline-flex items-center gap-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded">
+                              <CheckCircleIcon className="w-3 h-3" /> {stmt}
+                            </span>
+                          ) : null
+                        })}
+                        {selectedDoc.missing_inputs?.map(m => (
+                          <span key={m} className="inline-flex items-center gap-1 text-xs font-medium bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded">
+                            <XMarkIcon className="w-3 h-3" /> {m} missing
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="card">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Years Covered</h4>
+                      <p className="text-sm font-medium text-gray-900 mt-2">
+                        {selectedDoc.ai_analysis.years.length > 0 
+                          ? selectedDoc.ai_analysis.years.join(', ')
+                          : 'No years detected'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <ReviewMappingsTable 
+                    mappings={selectedDoc.ai_analysis.mappings}
+                    overrides={overrides[selectedDoc.id] || {}}
+                    setOverrides={(next) => setOverrides({ ...overrides, [selectedDoc.id]: next })}
+                  />
+                </div>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Mappings table with manual override */}
-        <ReviewMappingsTable
-          mappings={mappings.filter((m, i) => (overrides[i] ?? m.mapped_to) !== 'IGNORE')}
-          overrides={overrides}
-          setOverrides={setOverrides}
-        />
-
-        {/* IGNORED rows — collapsible */}
-        <div className="card">
-          <button
-            type="button"
-            onClick={() => setShowIgnored(!showIgnored)}
-            className="flex items-center gap-2 text-sm font-semibold text-gray-700"
-          >
-            {showIgnored ? <ChevronDownIcon className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
-            Ignored rows ({ignoredMappings.length}) — click to expand and promote any back
-          </button>
-          {showIgnored && ignoredMappings.length > 0 && (
-            <div className="mt-3 overflow-x-auto max-h-[300px]">
-              <ReviewMappingsTable
-                mappings={ignoredMappings}
-                overrides={overrides}
-                setOverrides={setOverrides}
-              />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8">
+              <DocumentIcon className="w-16 h-16 mb-4 text-gray-200" />
+              <p className="text-lg font-medium text-gray-900">No document selected</p>
+              <p className="text-sm mt-2 max-w-md text-center">Select a document from the left panel to view details, run AI analysis, and review mappings.</p>
             </div>
           )}
         </div>
-
-        {/* Data Preview */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {(['PNL', 'BS', 'CF'] as const).map((stmt) => (
-            <div key={stmt} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-              <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 font-semibold text-gray-800 flex justify-between items-center">
-                {stmt}
-                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                  {Object.keys(editedParsed[stmt] || {}).length} items
-                </span>
-              </div>
-              <div className="overflow-x-auto flex-1 max-h-[400px]">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-white sticky top-0 border-b border-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 font-medium text-gray-500">Line Item</th>
-                      {years.map((y) => (
-                        <th key={y} className="px-4 py-2 font-medium text-gray-500 text-right">{y}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {Object.entries(editedParsed[stmt] || {}).map(([item, vals]) => (
-                      <tr key={item} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-2 font-medium text-gray-900 max-w-[200px] truncate" title={item}>{item}</td>
-                        {years.map((y) => (
-                          <td key={y} className="px-4 py-2 text-right text-gray-600 font-mono text-xs">
-                            {vals[y] ? vals[y].toLocaleString() : '-'}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                    {Object.keys(editedParsed[stmt] || {}).length === 0 && (
-                      <tr>
-                        <td colSpan={years.length + 1} className="px-4 py-8 text-center text-gray-400 italic">
-                          No items mapped
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-          <button onClick={() => { setIngestData(null); setOverrides({}) }} className="btn-secondary">
-            Cancel
-          </button>
-          <button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            className={`btn-primary flex items-center gap-2 ${
-              saveMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            title={hasErrors ? 'Saving despite validation issues — fix later in the project view' : ''}
-          >
-            {saveMutation.isPending ? (
-              'Saving...'
-            ) : (
-              <>
-                <CheckCircleIcon className="w-5 h-5" />
-                {hasErrors ? 'Save anyway' : 'Confirm & Save Data'}
-              </>
-            )}
-          </button>
-        </div>
       </div>
-    )
-  }
-
-  // ---------------------------------------------------------------------
-  // UPLOAD SCREEN
-  // ---------------------------------------------------------------------
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <SparklesIcon className="w-6 h-6 text-indigo-500" />
-            AI Document Ingestion
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Upload your raw financial statements (PDF, Excel, CSV) and our AI will automatically map them.
-          </p>
-        </div>
-      </div>
-
-      {/* Entity selector */}
-      <div className="card">
-        <label className="label" htmlFor="entity-select">Target entity</label>
-        <select
-          id="entity-select"
-          className="input max-w-md"
-          value={selectedEntityId}
-          onChange={(e) => setSelectedEntityId(e.target.value)}
-          disabled={uploadMutation.isPending || !!presetEntityId}
-        >
-          <option value="">— select an entity —</option>
-          {entities.map((ent) => (
-            <option key={ent.id} value={ent.id}>
-              {ent.name} {ent.entity_type ? `· ${ent.entity_type}` : ''}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-gray-500 mt-2">
-          {presetEntityId
-            ? 'Uploading inside this entity workspace; the destination is fixed.'
-            : 'Historical data will be saved under this entity. You can upload separately for each subsidiary.'}
-        </p>
-      </div>
-
-      <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group
-          ${isDragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'}
-          ${uploadMutation.isPending || !selectedEntityId ? 'pointer-events-none opacity-60' : ''}
-        `}
-      >
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
-        <input {...getInputProps()} />
-
-        {uploadMutation.isPending ? (
-          <div className="flex flex-col items-center justify-center space-y-4">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-              <SparklesIcon className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse" />
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-indigo-900">Processing Document</p>
-              <p className="text-sm text-indigo-600 mt-1 animate-pulse">Extracting tables, mapping items, validating balances...</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center relative z-10">
-            <div className="w-16 h-16 bg-white shadow-sm border border-gray-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-              <DocumentIcon className="w-8 h-8 text-indigo-500" />
-            </div>
-            <p className="text-gray-900 font-semibold text-lg">
-              {!selectedEntityId
-                ? 'Select an entity above first'
-                : isDragActive
-                ? 'Drop your file now!'
-                : 'Drag & drop a file here'}
-            </p>
-            <p className="text-gray-500 text-sm mt-2 mb-6">
-              Supports .pdf, .xlsx, .xls, and .csv
-            </p>
-            <button className="bg-white border border-gray-200 text-gray-700 font-medium py-2 px-6 rounded-lg shadow-sm hover:border-gray-300 transition-colors">
-              Browse Files
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Currently Loaded Data preview */}
-      {historical && (Object.keys(historical.PNL || {}).length > 0 || Object.keys(historical.BS || {}).length > 0) ? (
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
-            <TableCellsIcon className="w-5 h-5 text-gray-500" />
-            Currently Loaded Data
-          </h3>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {(['PNL', 'BS', 'CF'] as const).map((stmt) => {
-              const stmtData = historical[stmt as keyof HistoricalResponse] || {}
-              const items = Object.keys(stmtData)
-              const yearsSet = new Set<string>()
-              items.forEach((item) => Object.keys(stmtData[item]).forEach((y) => yearsSet.add(y)))
-              const stmtYears = Array.from(yearsSet).sort()
-
-              if (items.length === 0) return null
-
-              return (
-                <div key={stmt} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                  <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 font-semibold text-gray-800 flex justify-between items-center">
-                    {stmt}
-                    <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-1 rounded-full border border-green-200">
-                      {items.length} items loaded
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto flex-1 max-h-[300px]">
-                    <table className="min-w-full text-sm text-left">
-                      <thead className="bg-white sticky top-0 border-b border-gray-100">
-                        <tr>
-                          <th className="px-4 py-2 font-medium text-gray-500">Line Item</th>
-                          {stmtYears.map((y) => (
-                            <th key={y} className="px-4 py-2 font-medium text-gray-500 text-right">{y}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {items.map((item) => (
-                          <tr key={item} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-2 font-medium text-gray-900 max-w-[200px] truncate" title={item}>{item}</td>
-                            {stmtYears.map((y) => {
-                              const raw = stmtData[item]?.[Number(y)]
-                              return (
-                                <td key={y} className="px-4 py-2 text-right text-gray-600 font-mono text-xs">
-                                  {raw ? Number(raw).toLocaleString() : '-'}
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-bold mb-3">1</div>
-            <h4 className="font-semibold text-gray-900 text-sm mb-1">Pick the entity</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">Each subsidiary keeps its own historical series.</p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-bold mb-3">2</div>
-            <h4 className="font-semibold text-gray-900 text-sm mb-1">Drop the file</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">PDF, Excel, or CSV — the AI extracts and maps lines for you.</p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center font-bold mb-3">3</div>
-            <h4 className="font-semibold text-gray-900 text-sm mb-1">Review & save</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">Override any wrong mapping inline, then save.</p>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

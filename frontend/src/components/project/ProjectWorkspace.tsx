@@ -19,6 +19,7 @@ import { projectsApi, assumptionsApi, entitiesApi } from '../../services/api'
 import type { ModuleStatus } from '../../types/api'
 import UploadHistorical from './UploadHistorical'
 import UploadHistoricalAI from './UploadHistoricalAI'
+import ProjectDashboard from './ProjectDashboard'
 import AssumptionsPanel from '../modules/AssumptionsPanel'
 import ProjectionsView from '../projections/ProjectionsView'
 import ValuationView from '../valuation/ValuationView'
@@ -125,11 +126,11 @@ export default function ProjectWorkspace() {
         {!isMultiEntity && (
           <div className="max-w-[1800px] mx-auto px-6 flex gap-1 border-t border-gray-100">
             {[
-              { to: '', label: 'Historical Data' },
+              { to: '', label: '🚀 Dashboard' },
+              { to: 'historical', label: 'Historical Data' },
               { to: 'assumptions', label: 'Assumptions' },
               { to: 'projections', label: 'Projections' },
               { to: 'valuation', label: 'Valuation' },
-              { to: 'share', label: '👥 Share' },
             ].map(tab => (
               <NavLink
                 key={tab.to}
@@ -208,7 +209,6 @@ export default function ProjectWorkspace() {
               element={<div className="card"><SharePanel projectId={id!} /></div>}
             />
 
-            {/* Legacy single-entity routes (backward compatibility) */}
             <Route
               index
               element={
@@ -219,34 +219,40 @@ export default function ProjectWorkspace() {
                     <p className="text-sm mt-1">or click the Consolidated View to see group financials</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-6">
-                    <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
-                      <button
-                        onClick={() => setUploadMode('ai')}
-                        className={clsx(
-                          "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
-                          uploadMode === 'ai' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        )}
-                      >
-                        ✨ AI Ingestion
-                      </button>
-                      <button
-                        onClick={() => setUploadMode('manual')}
-                        className={clsx(
-                          "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
-                          uploadMode === 'manual' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                        )}
-                      >
-                        Template (Manual)
-                      </button>
-                    </div>
-                    {uploadMode === 'ai' ? (
-                      <UploadHistoricalAI projectId={id!} project={project} />
-                    ) : (
-                      <UploadHistorical projectId={id!} project={project} />
-                    )}
-                  </div>
+                  <ProjectDashboard projectId={id!} project={project} />
                 )
+              }
+            />
+            <Route
+              path="historical"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
+                    <button
+                      onClick={() => setUploadMode('ai')}
+                      className={clsx(
+                        "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        uploadMode === 'ai' ? "bg-white text-indigo-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      )}
+                    >
+                      ✨ AI Ingestion
+                    </button>
+                    <button
+                      onClick={() => setUploadMode('manual')}
+                      className={clsx(
+                        "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        uploadMode === 'manual' ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      )}
+                    >
+                      Template (Manual)
+                    </button>
+                  </div>
+                  {uploadMode === 'ai' ? (
+                    <UploadHistoricalAI projectId={id!} project={project} />
+                  ) : (
+                    <UploadHistorical projectId={id!} project={project} />
+                  )}
+                </div>
               }
             />
 

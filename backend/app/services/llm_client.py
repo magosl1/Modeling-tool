@@ -12,6 +12,7 @@ The LLM **never** sees raw numbers. Callers send only labels and structure.
 from __future__ import annotations
 
 import time
+import json
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -104,7 +105,7 @@ def _call_litellm(
     messages: list[dict[str, Any]],
     tools: Optional[list[dict[str, Any]]] = None,
     tool_choice: Optional[str | dict[str, Any]] = None,
-    response_format: Optional[dict[str, Any]] = None,
+    response_format: Optional[dict[str, Any] | Any] = None,
     timeout: float,
     max_tokens: int = 4096,
     temperature: float = 0.0,
@@ -127,7 +128,37 @@ def _call_litellm(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice or "auto"
     if response_format:
-        kwargs["response_format"] = response_format
+        # Gemini/VertexAI is extremely strict and fails if "additionalProperties" is present in nested objects
+        if model.startswith("gemini/"):
+            schema = None
+            if hasattr(response_format, "model_json_schema"):
+                schema = response_format.model_json_schema()
+            elif isinstance(response_format, dict):
+                schema = response_format
+
+            if schema:
+                def strip_additional_props(obj):
+                    if isinstance(obj, dict):
+                        obj.pop("additionalProperties", None)
+                        # Vertex AI also doesn't like 'titles' or 'descriptions' sometimes in nested schemas if strict
+                        for k in list(obj.keys()):
+                            if k in ["additionalProperties", "title", "description"]:
+                                obj.pop(k)
+                        for v in obj.values():
+                            strip_additional_props(v)
+                    elif isinstance(obj, list):
+                        for v in obj:
+                            strip_additional_props(v)
+                
+                import copy
+                schema_clean = copy.deepcopy(schema)
+                strip_additional_props(schema_clean)
+                log.info(f"Using cleaned schema for Gemini: {json.dumps(schema_clean)[:200]}...")
+                kwargs["response_format"] = {"type": "json_schema", "json_schema": {"schema": schema_clean}}
+            else:
+                kwargs["response_format"] = response_format
+        else:
+            kwargs["response_format"] = response_format
 
     # Disable safety filters for Gemini to prevent false positives on financial data
     if model.startswith("gemini/"):
@@ -219,7 +250,7 @@ def smart_complete(
     *,
     tools: Optional[list[dict[str, Any]]] = None,
     tool_choice: Optional[str | dict[str, Any]] = None,
-    response_format: Optional[dict[str, Any]] = None,
+    response_format: Optional[dict[str, Any] | Any] = None,
     max_tokens: int = 16384,
 ) -> dict[str, Any]:
     """Call the user's configured *smart* (powerful) model.

@@ -35,6 +35,7 @@ def get_all_assumptions(
     for a in assumptions:
         result.setdefault(a.module, []).append({
             "id": a.id,
+            "entity_id": a.entity_id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
             "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
@@ -62,6 +63,7 @@ def get_module_assumptions(
     return [
         {
             "id": a.id,
+            "entity_id": a.entity_id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
             "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
@@ -92,11 +94,22 @@ def save_module_assumptions(
         db.delete(a)  # cascade deletes params via ORM relationship
     db.flush()
 
+    # Get the entity_id to use
+    # In multi-entity projects, it should come from the item or a param
+    # For backward compatibility, if not provided, use the project's first entity
+    from app.models.project import Entity
+    default_entity = db.query(Entity).filter(Entity.project_id == project_id).first()
+    if not default_entity:
+        raise HTTPException(400, "Project has no entities. Please create one first.")
+
     # Insert new
     for item in data:
+        item_entity_id = item.get("entity_id") or default_entity.id
+        
         assumption = ProjectionAssumption(
             id=str(uuid.uuid4()),
             project_id=project_id,
+            entity_id=item_entity_id,
             module=module,
             line_item=item.get("line_item", ""),
             projection_method=item.get("projection_method", ""),
@@ -165,3 +178,14 @@ def get_module_status(
         statuses.append({"module": module, "status": status})
 
     return statuses
+
+@router.post("/{project_id}/assumptions/auto-seed")
+def auto_seed_assumptions(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_project_for_write(project_id, current_user, db)
+    from app.services.assumption_service import seed_default_assumptions
+    seed_default_assumptions(project_id, db)
+    return {"message": "Default assumptions seeded based on historical data"}

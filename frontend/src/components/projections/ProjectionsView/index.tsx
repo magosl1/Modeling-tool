@@ -53,16 +53,47 @@ export default function ProjectionsView({ projectId, allModulesComplete, project
     updateYearsMutation.mutate(projYears)
   }, [projYears, updateYearsMutation])
 
+  const [isPolling, setIsPolling] = useState(false)
+  
+  const pollStatus = async (taskId: string) => {
+    try {
+      const res = await projectionsApi.checkStatus(projectId, taskId)
+      if (res.data.status === 'completed') {
+        setIsPolling(false)
+        toast.success('Projections complete!')
+        refetch()
+        qc.invalidateQueries({ queryKey: ['project', projectId] })
+        qc.invalidateQueries({ queryKey: ['scenarios', projectId] })
+      } else {
+        setTimeout(() => pollStatus(taskId), 2000)
+      }
+    } catch (err: any) {
+      setIsPolling(false)
+      const details = err.response?.data?.detail?.error?.details
+      if (details) {
+        toast.error(details.join('\n').slice(0, 200))
+      } else {
+        toast.error('Projection engine failed during async execution')
+      }
+    }
+  }
+
   const runMutation = useMutation({
     mutationFn: () => projectionsApi.run(projectId),
     onSuccess: data => {
-      toast.success('Projections complete!')
-      if (data.data.warnings?.length) {
-        data.data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
+      if (data.status === 202 && 'task_id' in data.data) {
+        setIsPolling(true)
+        toast('Running projections in background...', { icon: '⏳' })
+        pollStatus(data.data.task_id)
+      } else {
+        toast.success('Projections complete!')
+        if ('warnings' in data.data && (data.data as any).warnings?.length) {
+          (data.data as any).warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
+        }
+        refetch()
+        qc.invalidateQueries({ queryKey: ['project', projectId] })
+        qc.invalidateQueries({ queryKey: ['scenarios', projectId] })
       }
-      refetch()
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      qc.invalidateQueries({ queryKey: ['scenarios', projectId] })
     },
     onError: (err: unknown) => {
       const axiosErr = err as {
@@ -160,11 +191,11 @@ export default function ProjectionsView({ projectId, allModulesComplete, project
           )}
           <button
             onClick={() => runMutation.mutate()}
-            disabled={runMutation.isPending}
+            disabled={runMutation.isPending || isPolling}
             className="btn-primary"
             id="run-projections-btn"
           >
-            {runMutation.isPending ? 'Running...' : '▶ Run Projections'}
+            {runMutation.isPending || isPolling ? 'Running...' : '▶ Run Projections'}
           </button>
         </div>
       </div>

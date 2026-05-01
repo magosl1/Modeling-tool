@@ -112,6 +112,10 @@ def parse_numeric(val: Any) -> Optional[float]:
     except ValueError:
         return None
 
+    import math
+    if math.isnan(f) or math.isinf(f):
+        return None
+
     return -f if neg else f
 
 

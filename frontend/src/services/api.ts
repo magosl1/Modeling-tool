@@ -98,12 +98,18 @@ export const historicalApi = {
     form.append('file', file)
     return api.post(`/projects/${projectId}/upload/historical`, form)
   },
-  uploadAI: (projectId: string, file: File, entityId?: string): Promise<AxiosResponse<AIIngestionResponse>> => {
+  batchUpload: (projectId: string, files: File[], entityId?: string): Promise<AxiosResponse<any>> => {
     const form = new FormData()
-    form.append('file', file)
+    files.forEach(f => form.append('files', f))
     if (entityId) form.append('entity_id', entityId)
-    return api.post(`/projects/${projectId}/upload-ai`, form)
+    return api.post(`/projects/${projectId}/documents/batch`, form)
   },
+  getDocuments: (projectId: string): Promise<AxiosResponse<import('../types/api').UploadedDocument[]>> =>
+    api.get(`/projects/${projectId}/documents`),
+  toggleDocument: (projectId: string, docId: string, is_ignored: boolean): Promise<AxiosResponse<{ message: string; is_ignored: boolean }>> =>
+    api.patch(`/projects/${projectId}/documents/${docId}/toggle`, { is_ignored }),
+  analyzeDocument: (projectId: string, docId: string): Promise<AxiosResponse<{ message: string; ai_analysis: any; missing_inputs: string[] }>> =>
+    api.post(`/projects/${projectId}/documents/${docId}/analyze`),
   saveJSON: (projectId: string, data: { parsed: any; years: number[]; entity_id?: string }): Promise<AxiosResponse<{ message: string }>> =>
     api.post(`/projects/${projectId}/save-json`, data),
   getData: (projectId: string): Promise<AxiosResponse<HistoricalResponse>> =>
@@ -122,6 +128,8 @@ export const assumptionsApi = {
     api.put(`/projects/${projectId}/assumptions/${module}`, data),
   getModuleStatus: (projectId: string): Promise<AxiosResponse<ModuleStatus[]>> =>
     api.get(`/projects/${projectId}/modules/status`),
+  autoSeed: (projectId: string): Promise<AxiosResponse<{ message: string }>> =>
+    api.post(`/projects/${projectId}/assumptions/auto-seed`),
 }
 
 // Templates
@@ -134,8 +142,10 @@ export const templatesApi = {
 export const projectionsApi = {
   get: (projectId: string): Promise<AxiosResponse<ProjectionsResponse>> =>
     api.get(`/projects/${projectId}/projections`),
-  run: (projectId: string): Promise<AxiosResponse<RunProjectionResponse>> =>
+  run: (projectId: string): Promise<AxiosResponse<RunProjectionResponse | { task_id: string; status: string }>> =>
     api.post(`/projects/${projectId}/projections/run`),
+  checkStatus: (projectId: string, taskId: string): Promise<AxiosResponse<{ status: string }>> =>
+    api.get(`/projects/${projectId}/run/status/${taskId}`),
   export: (projectId: string): Promise<AxiosResponse<Blob>> =>
     api.get(`/projects/${projectId}/projections/export`, { responseType: 'blob' }),
 }

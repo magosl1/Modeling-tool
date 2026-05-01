@@ -18,6 +18,9 @@ import io
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import defusedxml
+defusedxml.defuse_stdlib()
+
 from app.core.logging import get_logger
 
 log = get_logger("app.extractor")
@@ -131,7 +134,9 @@ def _extract_excel(data: bytes, filename: str) -> ExtractedDocument:
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
         rows: list[list[Any]] = []
-        for row in ws.iter_rows():
+        for row_idx, row in enumerate(ws.iter_rows()):
+            if row_idx >= 50000:
+                break
             row_data: list[Any] = []
             for cell in row:
                 val = cell.value

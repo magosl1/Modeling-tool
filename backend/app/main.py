@@ -41,6 +41,13 @@ install_exception_handlers(app)
 app.middleware("http")(request_id_middleware)
 
 
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
+from app.core.rate_limit import limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
@@ -122,6 +129,42 @@ app.include_router(ai_settings.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 
 
+from fastapi import Depends
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from app.db.base import get_db
+import redis
+
 @app.get("/health")
-def health():
-    return {"status": "ok", "service": settings.APP_NAME}
+def health(db: Session = Depends(get_db)):
+    db_status = "ok"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "error"
+    
+    redis_status = "ok"
+    try:
+        r = redis.Redis.from_url(settings.REDIS_URL)
+        r.ping()
+    except Exception:
+        redis_status = "error"
+        
+    status = "ok" if db_status == "ok" and redis_status == "ok" else "error"
+    
+    return {
+        "status": status,
+        "service": settings.APP_NAME,
+        "database": db_status,
+        "redis": redis_status,
+    }
+
+@app.get("/metrics")
+def metrics():
+    # Simple custom JSON metrics for MVP.
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+        # For a full prometheus metrics endpoint, we would return plain text 
+        # using prometheus_client library, but this suffices for the MVP JSON requirement.
+    }
