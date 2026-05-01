@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Dict
+from typing import Dict, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -7,13 +7,24 @@ from app.models.project import HistoricalData, Project, ProjectionAssumption
 from app.services.projection_engine import ProjectionEngine
 
 _PNL_EXPENSE_ITEMS = [
-    "Cost of Goods Sold", "SG&A", "R&D", "D&A", 
-    "Amortization of Intangibles", "Other OpEx", 
+    "Cost of Goods Sold", "SG&A", "R&D", "D&A",
+    "Amortization of Intangibles", "Other OpEx",
     "Interest Expense", "Tax"
 ]
 
-def load_historical(project_id: str, db: Session) -> tuple:
-    records = db.query(HistoricalData).filter(HistoricalData.project_id == project_id).all()
+
+def load_historical(project_id: str, db: Session, entity_id: Optional[str] = None) -> tuple:
+    """Load historical financials.
+
+    When entity_id is provided, only that entity's rows are returned. When
+    omitted, the entire project's historical is aggregated (legacy behaviour
+    used by the consolidated views and the single-entity fast path).
+    """
+    q = db.query(HistoricalData).filter(HistoricalData.project_id == project_id)
+    if entity_id is not None:
+        q = q.filter(HistoricalData.entity_id == entity_id)
+    records = q.all()
+
     pnl, bs, cf = {}, {}, {}
     years = set()
     for r in records:
@@ -160,13 +171,22 @@ def transform_assumptions(raw: Dict[str, list]) -> Dict:
 
     return result
 
-def load_assumptions(project_id: str, db: Session) -> Dict:
-    assumptions_db = (
+def load_assumptions(project_id: str, db: Session, entity_id: Optional[str] = None) -> Dict:
+    """Load assumptions for a project, optionally scoped to one entity.
+
+    When entity_id is omitted, all entities' assumptions are merged — used by
+    the project-wide single-entity fast path. When provided, only that
+    entity's rows are returned, which is what the per-entity loop in
+    /projections/run uses.
+    """
+    q = (
         db.query(ProjectionAssumption)
         .options(joinedload(ProjectionAssumption.params))
         .filter(ProjectionAssumption.project_id == project_id)
-        .all()
     )
+    if entity_id is not None:
+        q = q.filter(ProjectionAssumption.entity_id == entity_id)
+    assumptions_db = q.all()
 
     raw: Dict[str, list] = {}
     for a in assumptions_db:
