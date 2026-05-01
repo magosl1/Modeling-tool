@@ -233,7 +233,7 @@ class TestApiKeySchemaLockdown:
         nor mask_api_key, since the new flow stores last4 separately and
         never decrypts the key on display."""
         from pathlib import Path
-        src = (Path(__file__).resolve().parents[2] / "app" / "api" / "routes" / "ai_settings.py").read_text()
+        src = (Path(__file__).resolve().parents[2] / "app" / "api" / "routes" / "ai_settings.py").read_text(encoding="utf-8")
         assert "decrypt_api_key" not in src, (
             "ai_settings.py must not call decrypt_api_key on read paths; "
             "use api_key_last4 for display."
