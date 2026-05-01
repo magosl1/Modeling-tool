@@ -18,7 +18,7 @@ from app.models.project import (
     ProjectedFinancial,
 )
 from app.models.user import User
-from app.services.projections_runner import load_historical, load_assumptions, run_projection_engine
+from app.services.projections_runner import load_assumptions, load_historical, run_projection_engine
 from app.tasks import run_projections_async
 
 router = APIRouter(prefix="/projects", tags=["projections"])

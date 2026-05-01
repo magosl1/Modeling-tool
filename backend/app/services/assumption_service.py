@@ -1,8 +1,11 @@
 import uuid
 from decimal import Decimal
 from typing import Dict, List
+
 from sqlalchemy.orm import Session
-from app.models.project import HistoricalData, ProjectionAssumption, AssumptionParam, Entity
+
+from app.models.project import AssumptionParam, Entity, HistoricalData, ProjectionAssumption
+
 
 def seed_default_assumptions(project_id: str, db: Session):
     """Automatically generates default 'flat growth' assumptions based on historical data."""
@@ -28,8 +31,9 @@ def seed_default_assumptions(project_id: str, db: Session):
         if r.year == max_year:
             latest_vals.setdefault(r.statement_type, {})[r.line_item] = Decimal(str(r.value))
 
-    # 4. Define default mappings for each module
-    module_configs = {
+    # 4. Default mappings reference (used as documentation; the per-module
+    # logic below inlines the values rather than reading from this dict).
+    _module_configs = {  # noqa: F841 — kept as in-source documentation
         "revenue": ("PNL", "growth_flat", "growth_rate", 0),
         "cogs": ("PNL", "growth_flat", "growth_rate", 0),
         "opex": ("PNL", "growth_flat", "growth_rate", 0),

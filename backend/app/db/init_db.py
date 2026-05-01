@@ -1,8 +1,9 @@
 """Initialize database tables."""
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
+
+from alembic import command
 from app.db.base import Base, engine
 from app.models.ai_settings import UserAISettings  # noqa: F401
 from app.models.eliminations import IntercompanyTransaction  # noqa: F401

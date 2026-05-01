@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_or_404
-from app.services.projections_runner import load_historical
 from app.db.base import get_db
 from app.models.project import ProjectedFinancial
 from app.models.user import User
+from app.services.projections_runner import load_historical
 
 router = APIRouter(prefix="/projects", tags=["ratios"])
 

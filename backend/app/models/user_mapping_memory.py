@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, DateTime, Float, ForeignKey, String
+
 from app.db.base import Base
+
 
 class UserMappingMemory(Base):
     __tablename__ = "user_mapping_memory"

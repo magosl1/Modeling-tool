@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.base import SessionLocal
 from app.models.entity import Entity
-from app.models.project import Project, ProjectedFinancial, NOLBalance
-from app.services.projections_runner import load_historical, load_assumptions, run_projection_engine
+from app.models.project import NOLBalance, Project, ProjectedFinancial
+from app.services.projections_runner import load_assumptions, load_historical, run_projection_engine
 
 celery_app = Celery("financial_modeler", broker=settings.REDIS_URL)
 celery_app.conf.update(

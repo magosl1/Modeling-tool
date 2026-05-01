@@ -1,5 +1,6 @@
-from app.db.base import SessionLocal
 from sqlalchemy import text
+
+from app.db.base import SessionLocal
 
 db = SessionLocal()
 result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='uploaded_files' ORDER BY ordinal_position"))

@@ -41,10 +41,11 @@ install_exception_handlers(app)
 app.middleware("http")(request_id_middleware)
 
 
-from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.rate_limit import limiter
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -129,11 +130,13 @@ app.include_router(ai_settings.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 
 
+import redis
 from fastapi import Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
 from app.db.base import get_db
-import redis
+
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):

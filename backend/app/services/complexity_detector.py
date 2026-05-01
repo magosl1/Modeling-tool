@@ -69,7 +69,6 @@ def evaluate_complexity(
             if m.get("confidence", 0) < CONFIDENCE_THRESHOLD:
                 low_confidence_count += 1
 
-    total_rows = sum(s.row_count for s in doc.sheets)
     # We use a heuristic: at least a certain percentage of the document should be mapped.
     # We only count non-empty labels.
     total_labels = len(phase1_mappings)

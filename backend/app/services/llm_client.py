@@ -11,8 +11,8 @@ The LLM **never** sees raw numbers. Callers send only labels and structure.
 """
 from __future__ import annotations
 
-import time
 import json
+import time
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session

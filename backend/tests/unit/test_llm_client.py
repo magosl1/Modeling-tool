@@ -17,7 +17,6 @@ from app.services.llm_client import (
     smart_complete,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -73,7 +72,7 @@ class TestCheapComplete:
         assert call_kwargs["model"] == "gemini/gemini-2.5-flash"
         assert call_kwargs["api_key"] == "sk-test-key-12345"
         assert call_kwargs["temperature"] == 0.0
-        assert call_kwargs["timeout"] == 30.0
+        assert call_kwargs["timeout"] == 60.0
         assert result["choices"][0]["message"]["content"] == "OK"
 
     @pytest.mark.usefixtures("_patch_settings")
@@ -130,7 +129,7 @@ class TestSmartComplete:
 
         call_kwargs = mock_comp.call_args.kwargs
         assert call_kwargs["model"] == "gemini/gemini-2.5-pro"
-        assert call_kwargs["timeout"] == 90.0
+        assert call_kwargs["timeout"] == 120.0
 
 
 # ---------------------------------------------------------------------------

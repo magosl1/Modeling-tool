@@ -1,13 +1,14 @@
-import json
-from typing import Dict, List, Optional
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
 import csv
 import io
+import json
+from typing import Dict, List, Optional
 
-from app.services.document_extractor import ExtractedDocument
-from app.services.llm_client import smart_complete, extract_content
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.core.logging import get_logger
+from app.services.document_extractor import ExtractedDocument
+from app.services.llm_client import extract_content, smart_complete
 
 log = get_logger("app.services.ai_ingestion")
 
