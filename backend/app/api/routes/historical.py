@@ -1,36 +1,36 @@
+import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Body, Request
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.api.routes.revenue_streams import _sync_revenue_assumptions
+from app.core.logging import get_logger
+from app.core.rate_limit import limiter
 from app.db.base import get_db
 from app.models.project import HistoricalData, Project, RevenueStream, UploadedFile
 from app.models.user import User
+from app.services.ai_ingestion_service import run_ai_extraction
+from app.services.ai_mapper import map_document_phase1, map_document_phase2
+from app.services.complexity_detector import evaluate_complexity
+from app.services.document_extractor import extract_document
 from app.services.historical_validator import (
     parse_historical_excel,
     validate_historical_data,
 )
+from app.services.mapping_applier import apply_mappings
 from app.services.template_generator import (
     BS_ITEMS,
     CF_ITEMS,
     PNL_ITEMS,
     generate_historical_template,
 )
-from app.services.document_extractor import extract_document
-from app.services.ai_mapper import map_document_phase1, map_document_phase2
-from app.services.complexity_detector import evaluate_complexity
-from app.services.mapping_applier import apply_mappings
-from app.services.ai_ingestion_service import run_ai_extraction
-from app.core.logging import get_logger
-from app.core.rate_limit import limiter
-import os
-import shutil
-from sqlalchemy import func
 
 router = APIRouter(prefix="/projects", tags=["historical"])
 log = get_logger("app.api.historical")

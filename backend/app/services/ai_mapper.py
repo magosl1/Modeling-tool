@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.logging import get_logger
 from app.models.user_mapping_memory import UserMappingMemory
 from app.services.document_extractor import ExtractedDocument
-from app.services.llm_client import cheap_complete, smart_complete, extract_content
+from app.services.llm_client import cheap_complete, extract_content, smart_complete
 from app.services.template_generator import BS_ITEMS, CF_ITEMS, PNL_ITEMS
 
 log = get_logger("app.ai_mapper")

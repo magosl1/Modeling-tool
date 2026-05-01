@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
-from app.services.projections_runner import load_historical, transform_assumptions
 from app.db.base import get_db
 from app.models.project import (
     AssumptionParam,
@@ -19,6 +18,7 @@ from app.models.project import (
 )
 from app.models.user import User
 from app.services.monte_carlo import run_monte_carlo
+from app.services.projections_runner import load_historical, transform_assumptions
 
 router = APIRouter(prefix="/projects", tags=["simulation"])
 

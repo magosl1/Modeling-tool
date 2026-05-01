@@ -3,7 +3,7 @@ from typing import Dict
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.project import HistoricalData, ProjectionAssumption, Project
+from app.models.project import HistoricalData, Project, ProjectionAssumption
 from app.services.projection_engine import ProjectionEngine
 
 _PNL_EXPENSE_ITEMS = [

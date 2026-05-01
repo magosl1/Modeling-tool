@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import defusedxml
+
 defusedxml.defuse_stdlib()
 
 from app.core.logging import get_logger
