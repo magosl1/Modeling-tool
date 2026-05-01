@@ -23,5 +23,6 @@ litellm==1.55.3
 pdfplumber==0.11.4
 # Per-route rate limiting (used in app.main + app.core.rate_limit + ai routes)
 slowapi==0.1.9
-# Required by fastapi.testclient for the /tests/integration suite
-httpx==0.28.1
+# Required by fastapi.testclient for the /tests/integration suite.
+# Pinned <0.28 to satisfy litellm 1.55.3's `httpx<0.28.0` constraint.
+httpx==0.27.2
