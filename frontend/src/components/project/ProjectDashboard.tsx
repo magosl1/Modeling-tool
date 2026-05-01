@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   BarChart,
   Bar,
-  Cell
 } from 'recharts'
 import { 
   SparklesIcon, 
@@ -21,7 +20,7 @@ import {
   ArrowRightIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
-import { projectionsApi, assumptionsApi, historicalApi } from '../../services/api'
+import { projectionsApi, assumptionsApi } from '../../services/api'
 import type { Project } from '../../types/api'
 import UploadHistoricalAI from './UploadHistoricalAI'
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -14,7 +14,7 @@ import {
 
 import { entitiesApi, historicalApi } from '../../services/api'
 import { ALL_CANONICAL, statementOf, type CanonicalStatement } from '../../lib/canonicalItems'
-import type { Project, AIIngestionResponse, UploadedDocument } from '../../types/api'
+import type { Project, AIIngestionResponse } from '../../types/api'
 
 interface Props {
   projectId: string
@@ -292,6 +292,43 @@ export default function DocumentManager({ projectId, entityId: presetEntityId, o
     return needed.filter(n => !allFound.has(n))
   }, [documents])
 
+  // Years detected by the LLM across all active, analyzed documents.
+  // Backend stores them as strings (e.g. "2024", "2025e", "FY 2026") so we
+  // keep them as strings and let the user untick projection / forecast
+  // columns that should not enter the historical series.
+  const detectedYears = useMemo<string[]>(() => {
+    const set = new Set<string>()
+    documents.forEach(d => {
+      if (d.is_ignored || !d.has_analysis || !d.ai_analysis) return
+      // doc.ai_analysis.years was typed number[] historically but the new
+      // ingestion service returns the LLM's raw period labels; tolerate both.
+      const yrs: any[] = d.ai_analysis.years || []
+      yrs.forEach(y => set.add(String(y)))
+    })
+    return Array.from(set).sort()
+  }, [documents])
+
+  // Heuristic: any label that contains letters is almost certainly a
+  // projection / forecast column (2025e, FY26, Plan, Forecast, P25, …).
+  const looksLikeProjection = (year: string): boolean => /[a-zA-Z]/.test(year)
+
+  // Auto-exclude obvious projection columns the first time we see them
+  // so the user doesn't accidentally import "2025e" as actuals. Re-runs
+  // when a newly-analysed doc surfaces years we hadn't seen before.
+  const autoExcludedRef = useMemo(() => new Set<string>(), [])
+  useEffect(() => {
+    const fresh = detectedYears.filter(
+      y => looksLikeProjection(y) && !autoExcludedRef.has(y),
+    )
+    if (fresh.length === 0) return
+    fresh.forEach(y => autoExcludedRef.add(y))
+    setExcludedYears(prev => {
+      const next = new Set(prev)
+      fresh.forEach(y => next.add(y))
+      return next
+    })
+  }, [detectedYears, autoExcludedRef])
+
   return (
     <div className="flex flex-col h-[80vh] border rounded-lg bg-white overflow-hidden shadow-sm">
       {/* Header toolbar */}
@@ -330,6 +367,57 @@ export default function DocumentManager({ projectId, entityId: presetEntityId, o
           </button>
         </div>
       </div>
+
+      {/* Year filter — appears once at least one doc is analyzed. Lets the
+          user untick projection columns (2025e, FY26, Plan, …) so they do
+          not contaminate the historical series. */}
+      {detectedYears.length > 0 && (
+        <div className="px-4 py-2 border-b bg-white shrink-0 flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            Years to import
+          </span>
+          {detectedYears.map(y => {
+            const included = !excludedYears.has(y)
+            const looksProj = looksLikeProjection(y)
+            return (
+              <label
+                key={y}
+                className={`text-xs px-2 py-0.5 rounded border cursor-pointer select-none transition-colors ${
+                  included
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                    : 'border-gray-200 bg-gray-50 text-gray-400 line-through hover:bg-gray-100'
+                }`}
+                title={looksProj ? 'Looks like a projection / forecast column — usually excluded' : ''}
+              >
+                <input
+                  type="checkbox"
+                  className="mr-1.5 align-middle"
+                  checked={included}
+                  onChange={(e) => {
+                    setExcludedYears(prev => {
+                      const next = new Set(prev)
+                      if (e.target.checked) next.delete(y)
+                      else next.add(y)
+                      return next
+                    })
+                  }}
+                />
+                {y}
+                {looksProj && <span className="ml-1 text-[9px] uppercase opacity-60">proj</span>}
+              </label>
+            )
+          })}
+          {excludedYears.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setExcludedYears(new Set())}
+              className="ml-auto text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
+            >
+              Include all
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel: Document List */}

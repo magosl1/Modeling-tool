@@ -8,7 +8,7 @@ import type {
   RatiosResponse,
   LoginRequest, RegisterRequest, AuthTokens,
   ConsolidatedResponse, IntercompanyElimination, EliminationCreate,
-  AISettingsUpdate, AISettingsOut, AISettingsTestResult, AIIngestionResponse,
+  AISettingsUpdate, AISettingsOut, AISettingsTestResult,
 } from '../types/api'
 
 const BASE_URL = '/api/v1'
