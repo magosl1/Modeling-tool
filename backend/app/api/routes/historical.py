@@ -424,9 +424,8 @@ async def analyze_document(
             bucket = "CF"
             found_cf = True
             
-        # Zip periods with values, truncating if one list is shorter
-        item_vals_dict = dict(zip(extraction.periods, item.values))
-        parsed[bucket][item.standard_metric] = item_vals_dict
+        # values is already Dict[str, float] from the LLM response
+        parsed[bucket][item.standard_metric] = item.values
         mappings.append({
             "original_name": item.original_name,
             "mapped_to": item.standard_metric,

@@ -1,6 +1,13 @@
+"""AI ingestion service — extracts and normalises financial data from documents.
+
+Strategy: plain-text JSON in the system prompt, no response_format schema.
+This works identically across Gemini, Claude, and OpenAI and avoids all the
+'additionalProperties' / token-limit / structured-output issues we saw before.
+"""
 import csv
 import io
 import json
+import re
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel
@@ -12,15 +19,16 @@ from app.services.llm_client import extract_content, smart_complete
 
 log = get_logger("app.services.ai_ingestion")
 
-from pydantic import Field
+
+# ---------------------------------------------------------------------------
+# Output schema (used only for validation after parsing, NOT sent as JSON schema)
+# ---------------------------------------------------------------------------
 
 class ExtractedFinancialItem(BaseModel):
     standard_metric: str
     original_name: str
-    values: List[float] = Field(
-        ..., 
-        description="A list of numeric amounts exactly matching the order of the 'periods' array. Use 0.0 if missing."
-    )
+    values: Dict[str, float]  # {period: amount}
+
 
 class LLMFinancialExtraction(BaseModel):
     currency: Optional[str] = None
@@ -29,99 +37,174 @@ class LLMFinancialExtraction(BaseModel):
     financial_data: List[ExtractedFinancialItem]
     unmapped_items: List[str]
 
-SYSTEM_PROMPT = """Actúa como un Analista Financiero Experto y un Ingeniero de Datos especializado en la extracción y normalización de estados financieros. 
 
-Tu objetivo es recibir datos en texto plano o formato CSV (provenientes de Excel) de diferentes empresas y mapearlos a un esquema de datos JSON estándar y predecible, sin importar el formato original, el idioma o la estructura del documento.
+# ---------------------------------------------------------------------------
+# System prompt — explicit JSON example so any LLM understands the format
+# ---------------------------------------------------------------------------
 
-Sigue estrictamente estas reglas:
+SYSTEM_PROMPT = """\
+You are an expert financial analyst and data engineer specialised in extracting \
+and normalising financial statements from any format.
 
-1. RECONOCIMIENTO DE ESTRUCTURA Y PERIODOS:
-- Analiza el documento para entender su orientación. Las fechas/periodos (ej. '31/12/21', '2024', 'LTM', '3T25') pueden estar en la primera fila (como cabeceras) o en la primera columna. Identifícalas y úsalas como el eje temporal.
-- Ignora filas vacías, subtítulos irrelevantes o texto introductorio (ej. "P&G (Mn€)", "Income Statement | TIKR.com").
+## Task
+Receive raw CSV/text data exported from Excel and return a single JSON object. \
+Do NOT include any explanation, greeting, or markdown — ONLY the JSON object.
 
-2. MAPEO SEMÁNTICO (Fuzzy Matching):
-- Los conceptos financieros vendrán en diferentes idiomas (Inglés, Español) y usarán sinónimos. Debes mapearlos a nuestras "Métricas Estándar" en inglés. 
-- Ejemplos de mapeo:
-  * "Revenue", "Importe neto de la cifra de negocios", "Ventas" -> mapear a "Revenue"
-  * "Cost of Goods Sold", "Aprovisionamientos", "COGS" -> mapear a "Cost of Goods Sold"
-  * "Beneficio Neto", "Net Income", "Resultado del ejercicio" -> mapear a "Net Income"
-  * "Efectivo y equivalentes", "Cash and equivalents" -> mapear a "Cash & Equivalents"
-  * "Gastos de personal", "Sueldos", "Other OpEx" -> mapear a "Other OpEx"
-  * "Deuda a corto plazo", "Short term debt" -> mapear a "Short-Term Debt"
-- IMPORTANTE: Debes utilizar EXACTAMENTE una de las siguientes métricas estándar permitidas. No inventes nombres.
-  * PNL: "Revenue", "Cost of Goods Sold", "Gross Profit", "SG&A", "R&D", "D&A", "Amortization of Intangibles", "Other OpEx", "EBIT", "Interest Income", "Interest Expense", "Other Non-Operating Income / (Expense)", "EBT", "Tax", "Net Income"
-  * BS: "PP&E Gross", "Accumulated Depreciation", "Net PP&E", "Intangibles Gross", "Accumulated Amortization", "Net Intangibles", "Goodwill", "Inventories", "Accounts Receivable", "Prepaid Expenses & Other Current Assets", "Accounts Payable", "Accrued Liabilities", "Other Current Liabilities", "Other Long-Term Liabilities", "Cash & Equivalents", "Non-Operating Assets", "Short-Term Debt", "Long-Term Debt", "Share Capital", "Retained Earnings", "Other Equity (AOCI, Treasury Stock, etc.)"
-  * CF: "Net Income", "D&A Add-back", "Amortization of Intangibles Add-back", "Changes in Working Capital", "Operating Cash Flow", "Capex", "Acquisitions / Disposals", "Investing Cash Flow", "Debt Issuance / Repayment", "Dividends Paid", "Share Issuance / Buyback", "Financing Cash Flow", "Net Change in Cash"
-- Si no encuentras un mapeo adecuado entre estas opciones, ponlo en "unmapped_items".
+## Output format (follow exactly)
+{
+  "currency": "EUR",
+  "scale": "millions",
+  "periods": ["2021", "2022", "2023"],
+  "financial_data": [
+    {
+      "standard_metric": "Revenue",
+      "original_name": "Total Revenues",
+      "values": {"2021": 100.5, "2022": 120.3, "2023": 135.0}
+    },
+    {
+      "standard_metric": "Net Income",
+      "original_name": "Beneficio Neto",
+      "values": {"2021": 10.2, "2022": 12.5, "2023": 15.1}
+    }
+  ],
+  "unmapped_items": ["Some unrecognised line"]
+}
 
-3. NORMALIZACIÓN DE DATOS NUMÉRICOS:
-- Convierte todos los valores a números flotantes (float).
-- Elimina cualquier texto de las celdas de valor (ej. símbolos de moneda como €, $, texto explicativo).
-- Interpreta correctamente los valores negativos (ya sea que vengan con el signo '-' o entre paréntesis '( )').
-- Detecta si los números están en unidades absolutas, miles o millones (basado en el contexto o encabezados como 'Mn€') e indícalo en el JSON final.
-- Los porcentajes (ej. % Change YoY) conviértelos a formato decimal (ej. 15% o 0.15 debe ser 0.15).
+## Rules
 
-4. MANEJO DE ERRORES:
-- Si encuentras una métrica que no reconoces o no puedes mapear de forma segura a nuestro esquema estándar, agrégala a un array de "unmapped_items" en lugar de forzar un mapeo incorrecto y causar un error.
+### Periods
+- Detect all date/period headers (rows or columns): years like "2021", quarters \
+like "3Q25", labels like "LTM". Use them as keys in "values".
+- "periods" array must contain ALL detected periods in chronological order.
 
-5. FORMATO DE SALIDA ESTRICTO:
-- Debes devolver ÚNICAMENTE el objeto estructurado válido según el esquema. No incluyas explicaciones, saludos ni formato Markdown adicional.
-- En el campo 'values' de cada ExtractedFinancialItem, las claves (keys) del diccionario DEBEN ser exactamente los periodos detectados (ej. "2021", "2022") y los valores (values) DEBEN ser los importes numéricos correspondientes para ese periodo. ¡No dejes el diccionario 'values' vacío!
+### Mapping to standard metrics
+Map every line item to EXACTLY one of these allowed names. Use semantic/fuzzy \
+matching across English and Spanish:
+
+PNL: Revenue, Cost of Goods Sold, Gross Profit, SG&A, R&D, D&A, \
+Amortization of Intangibles, Other OpEx, EBIT, Interest Income, \
+Interest Expense, Other Non-Operating Income / (Expense), EBT, Tax, Net Income
+
+BS: PP&E Gross, Accumulated Depreciation, Net PP&E, Intangibles Gross, \
+Accumulated Amortization, Net Intangibles, Goodwill, Inventories, \
+Accounts Receivable, Prepaid Expenses & Other Current Assets, Accounts Payable, \
+Accrued Liabilities, Other Current Liabilities, Other Long-Term Liabilities, \
+Cash & Equivalents, Non-Operating Assets, Short-Term Debt, Long-Term Debt, \
+Share Capital, Retained Earnings, Other Equity (AOCI, Treasury Stock, etc.)
+
+CF: Net Income, D&A Add-back, Amortization of Intangibles Add-back, \
+Changes in Working Capital, Operating Cash Flow, Capex, Acquisitions / Disposals, \
+Investing Cash Flow, Debt Issuance / Repayment, Dividends Paid, \
+Share Issuance / Buyback, Financing Cash Flow, Net Change in Cash
+
+If no safe mapping exists → add to "unmapped_items".
+
+### Numbers
+- All values must be floats. Remove currency symbols and thousand separators.
+- Negative values: accept "-100" or "(100)", both become -100.0.
+- Percentages: convert 15% → 0.15.
+- "values" dict MUST be populated for every item — never leave it empty {}.
+- If a value is blank/missing for a period, use 0.0.
+
+### Skip
+- Skip empty rows, section headers, subtotals that duplicate other rows, \
+and any row that is entirely text with no numeric data.
 """
 
-def document_to_csv(doc: ExtractedDocument) -> str:
-    """Convierte el documento extraído a un string CSV para el LLM."""
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def document_to_csv(doc: ExtractedDocument, max_rows: int = 500) -> str:
+    """Convert extracted document to CSV string, capping total rows to avoid
+    context-window overflow on large Excel files."""
     output = io.StringIO()
     writer = csv.writer(output)
-    
+    total = 0
+
     for sheet in doc.sheets:
         writer.writerow([f"--- SHEET: {sheet.name} ---"])
         for row in sheet.rows:
+            if total >= max_rows:
+                writer.writerow(["... (truncated for length)"])
+                break
             writer.writerow([str(x) if x is not None else "" for x in row])
+            total += 1
         writer.writerow([])
-        
+
     return output.getvalue()
 
+
+def _clean_json(text: str) -> str:
+    """Strip markdown fences and leading/trailing whitespace."""
+    text = text.strip()
+    # Remove ```json ... ``` or ``` ... ```
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+# ---------------------------------------------------------------------------
+# Main extraction function
+# ---------------------------------------------------------------------------
+
 def run_ai_extraction(
-    user_id: str, 
-    extracted_doc: ExtractedDocument, 
-    db: Session
+    user_id: str,
+    extracted_doc: ExtractedDocument,
+    db: Session,
 ) -> LLMFinancialExtraction:
-    """Ejecuta el LLM para procesar el documento completo de una sola vez."""
+    """Call the LLM and return a validated LLMFinancialExtraction.
+
+    Uses plain-text JSON prompting (no response_format schema) so it works
+    identically with Gemini, Claude, and OpenAI.
+    """
     csv_text = document_to_csv(extracted_doc)
-    
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Aquí están los datos financieros:\n\n{csv_text}"}
+        {
+            "role": "user",
+            "content": (
+                "Extract the financial data from the following document and return "
+                "the JSON object as instructed. Do not add any other text.\n\n"
+                f"=== DOCUMENT START ===\n{csv_text}\n=== DOCUMENT END ==="
+            ),
+        },
     ]
-    
-    # In litellm, if response_format is a Pydantic BaseModel class,
-    # it uses the Structured Outputs feature of OpenAI / Gemini automatically.
+
+    # NO response_format — we parse the text ourselves
     res = smart_complete(
         user_id=user_id,
         db=db,
         messages=messages,
-        response_format=LLMFinancialExtraction,
+        # Generous token budget so Gemini doesn't truncate mid-JSON
+        max_tokens=8192,
     )
-    
-    content_str = extract_content(res)
-    
-    # Robust JSON parsing (handles potential Markdown markers)
-    def clean_json_string(s: str) -> str:
-        s = s.strip()
-        if s.startswith("```json"):
-            s = s[7:]
-        if s.startswith("```"):
-            s = s[3:]
-        if s.endswith("```"):
-            s = s[:-3]
-        return s.strip()
 
-    cleaned_content = clean_json_string(content_str)
-    
+    content_str = extract_content(res)
+    log.info("ai_ingestion_raw_response", chars=len(content_str), preview=content_str[:200])
+
+    cleaned = _clean_json(content_str)
+
     try:
-        data_dict = json.loads(cleaned_content)
+        data_dict = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        # Try to extract the first JSON object from the response in case there's
+        # surrounding text the model snuck in despite the instruction
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if match:
+            try:
+                data_dict = json.loads(match.group())
+            except json.JSONDecodeError:
+                log.error("ai_ingestion_json_parse_failed", error=str(e), content=content_str[:500])
+                raise ValueError(f"LLM returned invalid JSON: {e}")
+        else:
+            log.error("ai_ingestion_no_json_found", content=content_str[:500])
+            raise ValueError(f"LLM returned no JSON object. Response: {content_str[:300]}")
+
+    try:
         return LLMFinancialExtraction(**data_dict)
     except Exception as e:
-        log.error(f"Failed to parse AI output: {e}\nContent: {content_str[:500]}...")
-        raise ValueError(f"Failed to decode LLM JSON output: {str(e)}")
+        log.error("ai_ingestion_schema_validation_failed", error=str(e), data=str(data_dict)[:500])
+        raise ValueError(f"LLM JSON does not match expected schema: {e}")
