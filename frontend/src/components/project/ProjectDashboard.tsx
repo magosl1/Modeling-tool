@@ -45,6 +45,8 @@ export default function ProjectDashboard({ projectId, project }: Props) {
   })
 
   // 2. Mutations
+  // projectionsApi.run() transparently handles the 202+poll path for long
+  // projections (>10 years), so onSuccess only fires when the run is truly done.
   const runProjections = useMutation({
     mutationFn: () => projectionsApi.run(projectId),
     onSuccess: () => {
@@ -53,7 +55,7 @@ export default function ProjectDashboard({ projectId, project }: Props) {
       qc.invalidateQueries({ queryKey: ['module-status', projectId] })
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.detail?.error?.message || 'Projection failed')
+      toast.error(err.response?.data?.detail?.error?.message || err.message || 'Projection failed')
     }
   })
 

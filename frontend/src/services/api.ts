@@ -141,11 +141,35 @@ export const templatesApi = {
 }
 
 // Projections
+//
+// Async note: when project.projection_years > 10 the backend returns 202 with
+// a Celery task_id instead of running synchronously. `run` transparently polls
+// `checkStatus` until completion so callers can await a single promise without
+// caring whether the run was sync or async. Polls every 2s, times out at 5min.
+const ASYNC_POLL_INTERVAL_MS = 2000
+const ASYNC_POLL_TIMEOUT_MS = 5 * 60 * 1000
+
 export const projectionsApi = {
   get: (projectId: string): Promise<AxiosResponse<ProjectionsResponse>> =>
     api.get(`/projects/${projectId}/projections`),
-  run: (projectId: string): Promise<AxiosResponse<RunProjectionResponse | { task_id: string; status: string }>> =>
-    api.post(`/projects/${projectId}/projections/run`),
+  run: async (projectId: string): Promise<AxiosResponse<RunProjectionResponse | { status: string }>> => {
+    const res = await api.post<RunProjectionResponse | { task_id: string; status: string }>(
+      `/projects/${projectId}/projections/run`
+    )
+    if (res.status !== 202 || !(res.data as any)?.task_id) {
+      return res as AxiosResponse<RunProjectionResponse>
+    }
+    const taskId = (res.data as any).task_id as string
+    const startedAt = Date.now()
+    while (true) {
+      await new Promise(r => setTimeout(r, ASYNC_POLL_INTERVAL_MS))
+      const status = await api.get<{ status: string }>(`/projects/${projectId}/run/status/${taskId}`)
+      if (status.data.status === 'completed') return status
+      if (Date.now() - startedAt > ASYNC_POLL_TIMEOUT_MS) {
+        throw new Error('Projection timed out after 5 minutes. Check Celery worker logs.')
+      }
+    }
+  },
   checkStatus: (projectId: string, taskId: string): Promise<AxiosResponse<{ status: string }>> =>
     api.get(`/projects/${projectId}/run/status/${taskId}`),
   export: (projectId: string): Promise<AxiosResponse<Blob>> =>
