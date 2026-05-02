@@ -121,15 +121,20 @@ export const historicalApi = {
 }
 
 // Assumptions
+// scenarioId is forwarded as a query param to read/write the right scenario's
+// assumption bucket. Pass null/undefined to operate on the Base scenario.
+const scenarioParams = (scenarioId?: string | null) =>
+  scenarioId ? { params: { scenario_id: scenarioId } } : undefined
+
 export const assumptionsApi = {
-  getAll: (projectId: string): Promise<AxiosResponse<AllAssumptions>> =>
-    api.get(`/projects/${projectId}/assumptions`),
-  getModule: (projectId: string, module: string): Promise<AxiosResponse<AssumptionItem[]>> =>
-    api.get(`/projects/${projectId}/assumptions/${module}`),
-  saveModule: (projectId: string, module: string, data: AssumptionItem[]): Promise<AxiosResponse<{ message: string }>> =>
-    api.put(`/projects/${projectId}/assumptions/${module}`, data),
-  getModuleStatus: (projectId: string): Promise<AxiosResponse<ModuleStatus[]>> =>
-    api.get(`/projects/${projectId}/modules/status`),
+  getAll: (projectId: string, scenarioId?: string | null): Promise<AxiosResponse<AllAssumptions>> =>
+    api.get(`/projects/${projectId}/assumptions`, scenarioParams(scenarioId)),
+  getModule: (projectId: string, module: string, scenarioId?: string | null): Promise<AxiosResponse<AssumptionItem[]>> =>
+    api.get(`/projects/${projectId}/assumptions/${module}`, scenarioParams(scenarioId)),
+  saveModule: (projectId: string, module: string, data: AssumptionItem[], scenarioId?: string | null): Promise<AxiosResponse<{ message: string }>> =>
+    api.put(`/projects/${projectId}/assumptions/${module}`, data, scenarioParams(scenarioId)),
+  getModuleStatus: (projectId: string, scenarioId?: string | null): Promise<AxiosResponse<ModuleStatus[]>> =>
+    api.get(`/projects/${projectId}/modules/status`, scenarioParams(scenarioId)),
   autoSeed: (projectId: string): Promise<AxiosResponse<{ message: string }>> =>
     api.post(`/projects/${projectId}/assumptions/auto-seed`),
 }

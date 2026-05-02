@@ -1,13 +1,13 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user, get_project_for_write, get_project_or_404
 from app.db.base import get_db
-from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption
+from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption, Scenario
 from app.models.user import User
 
 router = APIRouter(prefix="/projects", tags=["assumptions"])
@@ -18,17 +18,42 @@ MODULES = [
 ]
 
 
+def _resolve_scenario_id(project_id: str, scenario_id: Optional[str], db: Session) -> Optional[str]:
+    """Map a request-supplied scenario id to the DB convention.
+
+    Base scenarios are stored as scenario_id=NULL on assumption rows (legacy
+    convention preserved across the codebase — see scenarios.py). So if the
+    caller passes the base scenario's UUID we normalise to None, otherwise we
+    validate the scenario belongs to this project.
+    """
+    if not scenario_id:
+        return None
+    s = db.query(Scenario).filter(
+        Scenario.id == scenario_id,
+        Scenario.project_id == project_id,
+    ).first()
+    if not s:
+        raise HTTPException(404, f"Scenario {scenario_id} not found in project")
+    return None if s.is_base else scenario_id
+
+
 @router.get("/{project_id}/assumptions")
 def get_all_assumptions(
     project_id: str,
+    scenario_id: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_project_or_404(project_id, current_user, db)
+    effective_scenario = _resolve_scenario_id(project_id, scenario_id, db)
     assumptions = (
         db.query(ProjectionAssumption)
         .options(joinedload(ProjectionAssumption.params))
-        .filter(ProjectionAssumption.project_id == project_id)
+        .filter(
+            ProjectionAssumption.project_id == project_id,
+            ProjectionAssumption.scenario_id.is_(None) if effective_scenario is None
+            else ProjectionAssumption.scenario_id == effective_scenario,
+        )
         .all()
     )
     result = {}
@@ -47,16 +72,20 @@ def get_all_assumptions(
 def get_module_assumptions(
     project_id: str,
     module: str,
+    scenario_id: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_project_or_404(project_id, current_user, db)
+    effective_scenario = _resolve_scenario_id(project_id, scenario_id, db)
     assumptions = (
         db.query(ProjectionAssumption)
         .options(joinedload(ProjectionAssumption.params))
         .filter(
             ProjectionAssumption.project_id == project_id,
             ProjectionAssumption.module == module,
+            ProjectionAssumption.scenario_id.is_(None) if effective_scenario is None
+            else ProjectionAssumption.scenario_id == effective_scenario,
         )
         .all()
     )
@@ -77,20 +106,32 @@ def save_module_assumptions(
     project_id: str,
     module: str,
     data: List[Dict],
+    scenario_id: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Save/overwrite assumption configuration for a module."""
+    """Save/overwrite assumption configuration for a module within a scenario.
+
+    When scenario_id is omitted (or refers to the base scenario) we operate on
+    the legacy NULL bucket so existing single-scenario projects keep working.
+    """
     if module not in MODULES:
         raise HTTPException(400, f"Unknown module: {module}")
     get_project_for_write(project_id, current_user, db)
+    effective_scenario = _resolve_scenario_id(project_id, scenario_id, db)
 
-    # Delete existing assumptions for this module
-    existing = db.query(ProjectionAssumption).filter(
+    # Delete existing assumptions for this module *within the target scenario only*.
+    # Without the scenario filter, editing an Upside scenario would silently wipe
+    # the Base scenario's data — exactly the bug the override UI exists to fix.
+    existing_q = db.query(ProjectionAssumption).filter(
         ProjectionAssumption.project_id == project_id,
         ProjectionAssumption.module == module,
-    ).all()
-    for a in existing:
+    )
+    if effective_scenario is None:
+        existing_q = existing_q.filter(ProjectionAssumption.scenario_id.is_(None))
+    else:
+        existing_q = existing_q.filter(ProjectionAssumption.scenario_id == effective_scenario)
+    for a in existing_q.all():
         db.delete(a)  # cascade deletes params via ORM relationship
     db.flush()
 
@@ -110,6 +151,7 @@ def save_module_assumptions(
             id=str(uuid.uuid4()),
             project_id=project_id,
             entity_id=item_entity_id,
+            scenario_id=effective_scenario,
             module=module,
             line_item=item.get("line_item", ""),
             projection_method=item.get("projection_method", ""),
@@ -139,20 +181,26 @@ def save_module_assumptions(
 @router.get("/{project_id}/modules/status")
 def get_module_status(
     project_id: str,
+    scenario_id: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns status per module: not_started | configured | complete | error."""
     get_project_or_404(project_id, current_user, db)
+    effective_scenario = _resolve_scenario_id(project_id, scenario_id, db)
     has_historical = db.query(HistoricalData.id).filter(HistoricalData.project_id == project_id).first() is not None
 
     # Single query with eager loading instead of N+1
-    assumptions = (
+    assumptions_q = (
         db.query(ProjectionAssumption)
         .options(joinedload(ProjectionAssumption.params))
         .filter(ProjectionAssumption.project_id == project_id)
-        .all()
     )
+    if effective_scenario is None:
+        assumptions_q = assumptions_q.filter(ProjectionAssumption.scenario_id.is_(None))
+    else:
+        assumptions_q = assumptions_q.filter(ProjectionAssumption.scenario_id == effective_scenario)
+    assumptions = assumptions_q.all()
 
     # Group by module
     by_module: Dict[str, list] = {}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { scenariosApi } from '../../services/api'
 import toast from 'react-hot-toast'
+import { useScenarioStore } from '../../store/scenarioStore'
 
 interface Scenario {
   id: string
@@ -24,6 +25,17 @@ export default function ScenarioManager({ projectId, activeScenarioId, onScenari
   const [newDesc, setNewDesc] = useState('')
   const [cloneFrom, setCloneFrom] = useState<string | undefined>(undefined)
   const qc = useQueryClient()
+  const setActiveScenarioGlobal = useScenarioStore(s => s.setActiveScenario)
+
+  // Mirror local activeScenarioId into the global store so AssumptionsPanel
+  // (rendered on a different route) reads/writes the same scenario bucket.
+  // Pass null when the base pill is active to hit the legacy NULL bucket.
+  const handleScenarioChange = (id: string | null) => {
+    onScenarioChange(id)
+    const baseScenario = scenarios.find(s => s.is_base)
+    const effective = id && baseScenario && id === baseScenario.id ? null : id
+    setActiveScenarioGlobal(projectId, effective)
+  }
 
   const { data: scenarios = [] } = useQuery<Scenario[]>({
     queryKey: ['scenarios', projectId],
@@ -52,7 +64,10 @@ export default function ScenarioManager({ projectId, activeScenarioId, onScenari
     onSuccess: (_, deletedId) => {
       toast.success('Scenario deleted')
       qc.invalidateQueries({ queryKey: ['scenarios', projectId] })
-      if (activeScenarioId === deletedId) onScenarioChange(null)
+      if (activeScenarioId === deletedId) {
+        onScenarioChange(null)
+        setActiveScenarioGlobal(projectId, null)
+      }
     },
     onError: (err: any) => toast.error(err.response?.data?.detail || 'Cannot delete this scenario'),
   })
@@ -149,7 +164,7 @@ export default function ScenarioManager({ projectId, activeScenarioId, onScenari
           <ScenarioPill
             scenario={baseScenario}
             isActive={activeScenarioId === baseScenario.id}
-            onSelect={() => onScenarioChange(baseScenario.id)}
+            onSelect={() => handleScenarioChange(baseScenario.id)}
             onRun={() => runMutation.mutate(baseScenario.id)}
             isRunning={runMutation.isPending && runMutation.variables === baseScenario.id}
           />
@@ -163,7 +178,7 @@ export default function ScenarioManager({ projectId, activeScenarioId, onScenari
             key={s.id}
             scenario={s}
             isActive={activeScenarioId === s.id}
-            onSelect={() => onScenarioChange(s.id)}
+            onSelect={() => handleScenarioChange(s.id)}
             onRun={() => runMutation.mutate(s.id)}
             onDelete={() => {
               if (confirm(`Delete scenario "${s.name}"?`)) deleteMutation.mutate(s.id)
