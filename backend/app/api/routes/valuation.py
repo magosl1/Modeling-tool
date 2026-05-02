@@ -10,6 +10,7 @@ from app.db.base import get_db
 from app.models.project import Project, ProjectedFinancial, ValuationInput, ValuationOutput
 from app.models.user import User
 from app.schemas.project import ValuationInputCreate
+from app.services.audit_service import log_change
 from app.services.dcf_engine import DCFEngine
 
 router = APIRouter(prefix="/projects", tags=["valuation"])
@@ -101,6 +102,16 @@ def run_valuation(
 
     project.status = "valued"
     project.updated_at = datetime.now(timezone.utc)
+    db.flush()
+    log_change(
+        db, project_id=project_id, user_id=current_user.id,
+        entity="valuation", entity_id=vi.id,
+        action="create",
+        after={"wacc": str(data.wacc), "terminal_growth_rate": str(data.terminal_growth_rate),
+               "exit_multiple": str(data.exit_multiple) if data.exit_multiple else None,
+               "method": tv_method},
+        summary=f"Valuation run: WACC={data.wacc*100:.1f}%, g={data.terminal_growth_rate*100:.1f}%",
+    )
     db.commit()
 
     return {

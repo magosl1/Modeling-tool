@@ -65,6 +65,8 @@ export const projectsApi = {
   get: (id: string): Promise<AxiosResponse<Project>> => api.get(`/projects/${id}`),
   update: (id: string, data: ProjectUpdate): Promise<AxiosResponse<Project>> => api.put(`/projects/${id}`, data),
   delete: (id: string): Promise<AxiosResponse<void>> => api.delete(`/projects/${id}`),
+  getChangelog: (id: string, params?: { entity?: string; since?: string; limit?: number }) =>
+    api.get(`/projects/${id}/changelog`, { params }),
 }
 
 // Entities (Phase 0 — Universal Platform)

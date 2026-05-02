@@ -31,6 +31,7 @@ import SharePanel from './SharePanel'
 import EntityTree from './EntityTree'
 import EntityWorkspace from '../entity/EntityWorkspace'
 import ConsolidatedView from '../consolidation/ConsolidatedView'
+import AuditTimeline from './AuditTimeline'
 
 // ── Module status helpers ─────────────────────────────────────────────────────
 
@@ -131,6 +132,7 @@ export default function ProjectWorkspace() {
               { to: 'assumptions', label: 'Assumptions' },
               { to: 'projections', label: 'Projections' },
               { to: 'valuation', label: 'Valuation' },
+              { to: 'activity', label: '🕐 Activity' },
             ].map(tab => (
               <NavLink
                 key={tab.to}
@@ -335,6 +337,18 @@ export default function ProjectWorkspace() {
             } />
             <Route path="projections" element={<ProjectionsView projectId={id!} allModulesComplete={allComplete} project={project} />} />
             <Route path="valuation" element={<ValuationView projectId={id!} />} />
+            <Route
+              path="activity"
+              element={
+                <div className="card flex flex-col min-h-[600px] overflow-hidden">
+                  <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-gray-800">Activity Log</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Audit trail — who changed what and when</p>
+                  </div>
+                  <AuditTimeline projectId={id!} />
+                </div>
+              }
+            />
           </Routes>
         </div>
       </div>

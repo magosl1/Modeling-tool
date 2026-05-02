@@ -7,11 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.base import get_db
+from app.models.audit import ChangeLog
 from app.models.entity import Entity
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 from app.services.sectors import SECTOR_BY_ID, list_sectors_grouped
+from datetime import datetime
+from fastapi import Query
+from typing import Optional
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -105,3 +109,47 @@ def delete_project(project_id: str, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=404, detail="Project not found")
     db.delete(project)
     db.commit()
+
+
+@router.get("/{project_id}/changelog")
+def get_changelog(
+    project_id: str,
+    entity: Optional[str] = Query(default=None, description="Filter by entity type: assumption|historical|scenario|valuation"),
+    since: Optional[str] = Query(default=None, description="ISO8601 datetime — only return entries after this"),
+    limit: int = Query(default=50, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the audit changelog for a project, newest first."""
+    from app.api.deps import get_project_or_404
+    get_project_or_404(project_id, current_user, db)
+
+    q = db.query(ChangeLog, User.email).outerjoin(
+        User, User.id == ChangeLog.user_id
+    ).filter(ChangeLog.project_id == project_id)
+
+    if entity:
+        q = q.filter(ChangeLog.entity == entity)
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            q = q.filter(ChangeLog.created_at >= since_dt)
+        except ValueError:
+            raise HTTPException(400, f"Invalid 'since' datetime: {since}")
+
+    rows = q.order_by(ChangeLog.created_at.desc()).limit(limit).all()
+
+    return [
+        {
+            "id": entry.id,
+            "user_email": email,
+            "entity": entry.entity,
+            "entity_id": entry.entity_id,
+            "action": entry.action,
+            "summary": entry.summary,
+            "before_json": entry.before_json,
+            "after_json": entry.after_json,
+            "created_at": entry.created_at.isoformat() + "Z",
+        }
+        for entry, email in rows
+    ]

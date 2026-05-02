@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, get_project_for_write, get_project_or
 from app.db.base import get_db
 from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption, Scenario
 from app.models.user import User
+from app.services.audit_service import log_change, serialize_model
 
 router = APIRouter(prefix="/projects", tags=["assumptions"])
 
@@ -125,7 +126,7 @@ def save_module_assumptions(
     # Delete existing assumptions for this module *within the target scenario only*.
     # Without the scenario filter, editing an Upside scenario would silently wipe
     # the Base scenario's data — exactly the bug the override UI exists to fix.
-    existing_q = db.query(ProjectionAssumption).filter(
+    existing_q = db.query(ProjectionAssumption).options(joinedload(ProjectionAssumption.params)).filter(
         ProjectionAssumption.project_id == project_id,
         ProjectionAssumption.module == module,
     )
@@ -133,7 +134,10 @@ def save_module_assumptions(
         existing_q = existing_q.filter(ProjectionAssumption.scenario_id.is_(None))
     else:
         existing_q = existing_q.filter(ProjectionAssumption.scenario_id == effective_scenario)
-    for a in existing_q.all():
+    deleted_assumptions = existing_q.all()
+    # Capture before state for audit BEFORE deleting
+    deleted_snapshots = [(a.id, serialize_model(a)) for a in deleted_assumptions]
+    for a in deleted_assumptions:
         db.delete(a)  # cascade deletes params via ORM relationship
     db.flush()
 
@@ -177,6 +181,14 @@ def save_module_assumptions(
             ))
 
     db.commit()
+
+    # Audit: log delete of replaced assumptions + create of new ones
+    for old_id, old_snap in deleted_snapshots:
+        log_change(db, project_id=project_id, user_id=current_user.id,
+                   entity="assumption", entity_id=old_id,
+                   action="delete", before=old_snap)
+    db.commit()  # flush audit rows
+
     return {"message": f"Module '{module}' assumptions saved"}
 
 

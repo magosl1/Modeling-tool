@@ -21,6 +21,7 @@ from app.models.project import (
     Scenario,
 )
 from app.models.user import User
+from app.services.audit_service import log_change, serialize_model
 from app.services.projection_engine import ProjectionEngine
 from app.services.projections_runner import load_historical, transform_assumptions
 
@@ -178,6 +179,11 @@ def create_scenario(
 
     db.commit()
     db.refresh(new_scenario)
+    log_change(db, project_id=project_id, user_id=current_user.id,
+               entity="scenario", entity_id=new_scenario.id,
+               action="create", after={"id": new_scenario.id, "name": new_scenario.name,
+                                       "description": new_scenario.description})
+    db.commit()
     return new_scenario
 
 
@@ -192,7 +198,12 @@ def delete_scenario(
     scenario = _get_scenario_or_404(scenario_id, project_id, db)
     if scenario.is_base:
         raise HTTPException(400, "Cannot delete the base scenario")
+    before = serialize_model(scenario)
     db.delete(scenario)
+    db.commit()
+    log_change(db, project_id=project_id, user_id=current_user.id,
+               entity="scenario", entity_id=scenario_id,
+               action="delete", before=before)
     db.commit()
     return {"message": "Scenario deleted"}
 
