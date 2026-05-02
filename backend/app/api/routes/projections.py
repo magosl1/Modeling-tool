@@ -34,97 +34,125 @@ def run_projection(
     current_user: User = Depends(get_current_user),
 ):
     project = get_project_for_write(project_id, current_user, db)
-    
+
     if project.projection_years > 10:
         task = run_projections_async.delay(project_id)
         return Response(status_code=202, content=f'{{"task_id": "{task.id}", "status": "processing"}}', media_type="application/json")
 
-    pnl, bs, cf, hist_years = load_historical(project_id, db)
-
-    if not hist_years:
-        raise HTTPException(400, "No historical data uploaded. Please upload historical data first.")
-
-    assumptions = load_assumptions(project_id, db)
-    result, proj_years = run_projection_engine(project, pnl, bs, cf, hist_years, assumptions)
-
-    if result.errors:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": {
-                    "code": "PROJECTION_ERROR",
-                    "message": "Projection engine encountered errors",
-                    "details": result.errors,
-                }
-            },
-        )
-
-    # Every project has at least one entity after the Phase 0 finalize migration
-    # and because `create_project` seeds one. Use the first one in display order.
-    entity = (
+    # Loop per entity: each subsidiary keeps its own historical, its own
+    # assumptions, and its own projected output. The consolidated view
+    # aggregates these on read; we never overwrite one entity's projections
+    # with another's.
+    entities = (
         db.query(Entity)
         .filter(Entity.project_id == project.id)
         .order_by(Entity.display_order)
-        .first()
+        .all()
     )
-    if not entity:
+    if not entities:
         raise HTTPException(status_code=500, detail="Project has no entity — data integrity error.")
 
-    # Store projected financials — bulk insert is significantly faster than
-    # individual db.add() calls for potentially hundreds of rows.
-    # Scope deletes to this entity so parallel multi-entity runs don't clobber each other.
-    db.query(ProjectedFinancial).filter(
-        ProjectedFinancial.project_id == project_id,
-        ProjectedFinancial.entity_id == entity.id,
-        ProjectedFinancial.scenario_id == None,  # noqa: E711
-    ).delete()
+    # NOL is project-level (single accumulator across the group). Reset once.
     db.query(NOLBalance).filter(NOLBalance.project_id == project_id).delete()
 
-    def _rows_for_statement(data: dict, stmt_type: str) -> list:
-        rows = []
-        for line_item, year_vals in data.items():
-            for year, value in year_vals.items():
-                rows.append({
+    aggregated_warnings: list[str] = []
+    aggregated_proj_years: list[int] = []
+    runs_persisted = 0
+    skipped: list[str] = []
+    nol_persisted = False
+
+    for entity in entities:
+        pnl, bs, cf, hist_years = load_historical(project_id, db, entity_id=entity.id)
+        if not hist_years:
+            skipped.append(f"{entity.name} (no historical)")
+            continue
+
+        assumptions = load_assumptions(project_id, db, entity_id=entity.id)
+        if not assumptions:
+            skipped.append(f"{entity.name} (no assumptions)")
+            continue
+
+        result, proj_years = run_projection_engine(project, pnl, bs, cf, hist_years, assumptions)
+
+        if result.errors:
+            # One entity's broken assumptions shouldn't kill the whole batch,
+            # but the user must be able to see which entity failed and why.
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": {
+                        "code": "PROJECTION_ERROR",
+                        "message": f"Projection engine errors for entity '{entity.name}'",
+                        "entity_id": entity.id,
+                        "details": result.errors,
+                    }
+                },
+            )
+
+        # Wipe this entity's existing base-scenario projections, then bulk insert.
+        db.query(ProjectedFinancial).filter(
+            ProjectedFinancial.project_id == project_id,
+            ProjectedFinancial.entity_id == entity.id,
+            ProjectedFinancial.scenario_id == None,  # noqa: E711
+        ).delete()
+
+        rows: list[dict] = []
+        for stmt_type, data in (("PNL", result.pnl), ("BS", result.bs), ("CF", result.cf)):
+            for line_item, year_vals in data.items():
+                for year, value in year_vals.items():
+                    rows.append({
+                        "id": str(uuid.uuid4()),
+                        "project_id": project_id,
+                        "entity_id": entity.id,
+                        "statement_type": stmt_type,
+                        "line_item": line_item,
+                        "year": year,
+                        "value": value,
+                    })
+        if rows:
+            db.execute(insert(ProjectedFinancial), rows)
+
+        # Persist NOL only from the first entity that produces it; until we
+        # have a per-entity NOL model, project-level NOL = first entity's run.
+        if not nol_persisted and result.nol_balances:
+            nol_rows = [
+                {
                     "id": str(uuid.uuid4()),
                     "project_id": project_id,
-                    "entity_id": entity.id,
-                    "statement_type": stmt_type,
-                    "line_item": line_item,
                     "year": year,
-                    "value": value,
-                })
-        return rows
+                    "nol_opening": nol["nol_opening"],
+                    "nol_used": nol["nol_used"],
+                    "nol_closing": nol["nol_closing"],
+                }
+                for year, nol in result.nol_balances.items()
+            ]
+            db.execute(insert(NOLBalance), nol_rows)
+            nol_persisted = True
 
-    all_financial_rows = (
-        _rows_for_statement(result.pnl, "PNL")
-        + _rows_for_statement(result.bs, "BS")
-        + _rows_for_statement(result.cf, "CF")
-    )
-    if all_financial_rows:
-        db.execute(insert(ProjectedFinancial), all_financial_rows)
+        runs_persisted += 1
+        aggregated_warnings.extend(f"[{entity.name}] {w}" for w in result.warnings)
+        aggregated_proj_years = proj_years  # projection horizon is project-level
 
-    nol_rows = [
-        {
-            "id": str(uuid.uuid4()),
-            "project_id": project_id,
-            "year": year,
-            "nol_opening": nol["nol_opening"],
-            "nol_used": nol["nol_used"],
-            "nol_closing": nol["nol_closing"],
-        }
-        for year, nol in result.nol_balances.items()
-    ]
-    if nol_rows:
-        db.execute(insert(NOLBalance), nol_rows)
+    if runs_persisted == 0:
+        # No entity had both historical AND assumptions — surface the same
+        # 400 the legacy single-entity path used to throw, plus a hint.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No entity has both historical data and assumptions yet. "
+                + ("Skipped: " + "; ".join(skipped) if skipped else "")
+            ),
+        )
 
     project.status = "projected"
     project.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
-        "message": "Projections complete",
-        "projection_years": proj_years,
-        "warnings": result.warnings,
+        "message": f"Projections complete — {runs_persisted} entity run(s)",
+        "projection_years": aggregated_proj_years,
+        "warnings": aggregated_warnings,
+        "skipped_entities": skipped,
     }
 
 
