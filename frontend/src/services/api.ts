@@ -137,6 +137,12 @@ export const assumptionsApi = {
     api.get(`/projects/${projectId}/modules/status`, scenarioParams(scenarioId)),
   autoSeed: (projectId: string): Promise<AxiosResponse<{ message: string }>> =>
     api.post(`/projects/${projectId}/assumptions/auto-seed`),
+  aiHypothesis: (projectId: string): Promise<AxiosResponse<{
+    sector: string
+    items_persisted: number
+    items: { module: string; line_item: string; rationale: string }[]
+  }>> =>
+    api.post(`/projects/${projectId}/assumptions/ai-hypothesis`),
 }
 
 // Templates

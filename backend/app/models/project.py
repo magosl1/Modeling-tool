@@ -166,6 +166,11 @@ class ProjectionAssumption(Base):
     )
     line_item: Mapped[str] = mapped_column(String(100), nullable=False)
     projection_method: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Optional human-readable explanation of *why* this assumption was set the
+    # way it is. Populated by the AI hypothesis engine ("8% growth: historical
+    # CAGR was 7%, sector median 10%"). Surfaced in the UI so the analyst
+    # understands every default before tweaking it.
+    rationale: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project: Mapped["Project"] = relationship(back_populates="assumptions")

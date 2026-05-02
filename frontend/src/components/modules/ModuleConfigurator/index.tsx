@@ -178,6 +178,16 @@ export default function ModuleConfigurator({
                   </div>
                 </div>
 
+                {(item as any).rationale && (
+                  <div className="text-xs bg-fuchsia-50 border border-fuchsia-200 rounded px-3 py-2 text-fuchsia-900 flex gap-2">
+                    <span>💡</span>
+                    <span>
+                      <span className="font-semibold">AI rationale: </span>
+                      {(item as any).rationale}
+                    </span>
+                  </div>
+                )}
+
                 <HistoricalContext
                   lineItem={item.line_item}
                   statement={histStatement}

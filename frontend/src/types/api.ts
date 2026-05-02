@@ -130,6 +130,9 @@ export interface AssumptionItem {
   line_item: string
   projection_method: string
   params: AssumptionParam[]
+  // Set by the AI hypothesis engine. When present, the UI shows a 💡 with
+  // the explanation so the analyst knows why each value was chosen.
+  rationale?: string | null
 }
 
 export type AllAssumptions = Record<string, AssumptionItem[]>

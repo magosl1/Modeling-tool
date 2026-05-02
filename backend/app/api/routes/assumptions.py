@@ -63,6 +63,7 @@ def get_all_assumptions(
             "entity_id": a.entity_id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
+            "rationale": a.rationale,
             "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
         })
     return result
@@ -95,6 +96,7 @@ def get_module_assumptions(
             "entity_id": a.entity_id,
             "line_item": a.line_item,
             "projection_method": a.projection_method,
+            "rationale": a.rationale,
             "params": [{"param_key": p.param_key, "year": p.year, "value": str(p.value)} for p in a.params],
         }
         for a in assumptions
@@ -237,3 +239,22 @@ def auto_seed_assumptions(
     from app.services.assumption_service import seed_default_assumptions
     seed_default_assumptions(project_id, db)
     return {"message": "Default assumptions seeded based on historical data"}
+
+
+@router.post("/{project_id}/assumptions/ai-hypothesis")
+def ai_hypothesis(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a first-pass projection model with the AI hypothesis engine.
+
+    Persists into the base scenario only; override scenarios are preserved so
+    the analyst's experiments aren't blown away by a re-run.
+    """
+    get_project_for_write(project_id, current_user, db)
+    from app.services.ai_hypothesis_service import generate_hypothesis
+    try:
+        return generate_hypothesis(project_id, current_user.id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

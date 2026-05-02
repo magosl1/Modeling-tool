@@ -68,6 +68,24 @@ export default function ProjectDashboard({ projectId, project }: Props) {
     onSettled: () => setIsSeeding(false)
   })
 
+  // AI hypothesis: smarter first-pass model that uses the LLM to reason about
+  // sector + historicals and emits a per-line rationale. Falls back to plain
+  // auto-seed if the user hasn't configured AI settings (the backend raises
+  // LLMNoKeyError → 400 with a setup hint).
+  const aiHypothesis = useMutation({
+    mutationFn: () => assumptionsApi.aiHypothesis(projectId),
+    onSuccess: (res) => {
+      toast.success(`AI generated ${res.data.items_persisted} assumptions for ${res.data.sector}`)
+      qc.invalidateQueries({ queryKey: ['assumptions', projectId] })
+      qc.invalidateQueries({ queryKey: ['module-status', projectId] })
+      runProjections.mutate()
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || 'AI hypothesis failed')
+    },
+    onSettled: () => setIsSeeding(false),
+  })
+
   // 3. Data Processing for Charts
   const chartData = useMemo(() => {
     if (!projections) return []
@@ -187,14 +205,26 @@ export default function ProjectDashboard({ projectId, project }: Props) {
           </div>
           <div className="flex flex-wrap gap-3">
             {isAllPending && hasData && (
-              <button
-                onClick={() => { setIsSeeding(true); autoSeed.mutate(); }}
-                disabled={isSeeding}
-                className="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-xl font-semibold backdrop-blur-md border border-white/20 transition-all flex items-center gap-2"
-              >
-                <SparklesIcon className="w-5 h-5" />
-                {isSeeding ? 'Seeding...' : 'Auto-Seed Hypotheses'}
-              </button>
+              <>
+                <button
+                  onClick={() => { setIsSeeding(true); aiHypothesis.mutate(); }}
+                  disabled={isSeeding || aiHypothesis.isPending}
+                  className="bg-gradient-to-r from-fuchsia-500 to-indigo-500 hover:from-fuchsia-400 hover:to-indigo-400 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all flex items-center gap-2 disabled:opacity-60"
+                  title="Use AI to generate a sector-aware first-pass model with a rationale per assumption"
+                >
+                  <SparklesIcon className="w-5 h-5" />
+                  {aiHypothesis.isPending ? 'AI thinking…' : 'Build with AI'}
+                </button>
+                <button
+                  onClick={() => { setIsSeeding(true); autoSeed.mutate(); }}
+                  disabled={isSeeding}
+                  className="bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-xl font-semibold backdrop-blur-md border border-white/20 transition-all flex items-center gap-2"
+                  title="Quick rule-based seed (no AI required)"
+                >
+                  <SparklesIcon className="w-5 h-5" />
+                  {isSeeding && !aiHypothesis.isPending ? 'Seeding...' : 'Quick Seed'}
+                </button>
+              </>
             )}
             <button
               onClick={() => runProjections.mutate()}
