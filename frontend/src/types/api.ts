@@ -74,6 +74,7 @@ export interface Project {
   status: 'draft' | 'configured' | 'projected' | 'valued'
   project_type: ProjectType
   base_currency: string
+  sector?: string | null
   created_at: string
   updated_at: string
 }
@@ -86,6 +87,7 @@ export interface ProjectCreate {
   projection_years?: number
   project_type?: ProjectType
   base_currency?: string
+  sector?: string
 }
 
 export interface ProjectUpdate {
@@ -96,6 +98,7 @@ export interface ProjectUpdate {
   projection_years?: number
   project_type?: ProjectType
   base_currency?: string
+  sector?: string
 }
 
 // ── Historical ───────────────────────────────────────────

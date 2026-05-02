@@ -11,13 +11,26 @@ from app.models.entity import Entity
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
+from app.services.sectors import SECTOR_BY_ID, list_sectors_grouped
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.get("/_meta/sectors")
+def list_sectors():
+    """Catalog of supported sectors, grouped, for the project setup picker."""
+    return list_sectors_grouped()
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
 def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     base_currency = data.base_currency or data.currency
+    # Validate sector against the catalog so a typo doesn't silently degrade
+    # to generic defaults months later when the user wonders why the model
+    # looks off. Unknown ids are rejected; an empty/None sector is allowed
+    # (legacy / "I'll fill this in later").
+    if data.sector and data.sector not in SECTOR_BY_ID:
+        raise HTTPException(status_code=400, detail=f"Unknown sector '{data.sector}'")
     project = Project(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
@@ -28,6 +41,7 @@ def create_project(data: ProjectCreate, db: Session = Depends(get_db), current_u
         projection_years=data.projection_years,
         project_type=data.project_type,
         base_currency=base_currency,
+        sector=data.sector,
         status="draft",
     )
     db.add(project)
@@ -70,8 +84,11 @@ def update_project(project_id: str, data: ProjectUpdate, db: Session = Depends(g
     project = db.query(Project).filter(Project.id == project_id, Project.user_id == current_user.id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    allowed_fields = {"name", "currency", "scale", "fiscal_year_end", "projection_years", "project_type", "base_currency"}
-    for field, value in data.model_dump(exclude_none=True).items():
+    allowed_fields = {"name", "currency", "scale", "fiscal_year_end", "projection_years", "project_type", "base_currency", "sector"}
+    payload = data.model_dump(exclude_none=True)
+    if "sector" in payload and payload["sector"] and payload["sector"] not in SECTOR_BY_ID:
+        raise HTTPException(status_code=400, detail=f"Unknown sector '{payload['sector']}'")
+    for field, value in payload.items():
         if field not in allowed_fields:
             continue
         setattr(project, field, value)

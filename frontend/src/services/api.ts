@@ -197,6 +197,22 @@ export const ratiosApi = {
     api.get(`/projects/${projectId}/ratios`),
 }
 
+// Sector catalog (drives the project setup picker + sector-aware auto-seed)
+export interface SectorOption {
+  id: string
+  label: string
+  description: string
+  key_kpis: string[]
+}
+export interface SectorGroup {
+  group: string
+  sectors: SectorOption[]
+}
+export const sectorsApi = {
+  list: (): Promise<AxiosResponse<SectorGroup[]>> =>
+    api.get(`/projects/_meta/sectors`),
+}
+
 // Block 1 — Scenarios
 export const scenariosApi = {
   list: (projectId: string) => api.get(`/projects/${projectId}/scenarios`),

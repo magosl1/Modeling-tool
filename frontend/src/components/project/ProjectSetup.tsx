@@ -1,6 +1,8 @@
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
-import { projectsApi } from '../../services/api'
+import { useQuery } from '@tanstack/react-query'
+import { projectsApi, sectorsApi } from '../../services/api'
+import type { SectorOption } from '../../services/api'
 import toast from 'react-hot-toast'
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'BRL']
@@ -12,13 +14,28 @@ interface FormData {
   scale: string
   fiscal_year_end: string
   projection_years: number
+  sector: string
 }
 
 export default function ProjectSetup() {
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
-    defaultValues: { currency: 'USD', scale: 'thousands', projection_years: 5 },
+    defaultValues: { currency: 'USD', scale: 'thousands', projection_years: 5, sector: 'generic' },
   })
   const navigate = useNavigate()
+
+  // Sector catalog drives the picker + the sector-aware first-pass model the
+  // backend seeds once historicals are uploaded. Cached aggressively because
+  // it's effectively static config.
+  const { data: sectorGroups = [] } = useQuery({
+    queryKey: ['sectors'],
+    queryFn: () => sectorsApi.list().then(r => r.data),
+    staleTime: Infinity,
+  })
+
+  const selectedSectorId = watch('sector')
+  const selectedSector: SectorOption | undefined = sectorGroups
+    .flatMap(g => g.sectors)
+    .find(s => s.id === selectedSectorId)
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -31,7 +48,7 @@ export default function ProjectSetup() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-8">
       <div className="card w-full max-w-lg">
         <h1 className="text-xl font-bold mb-6">New Project</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -39,6 +56,33 @@ export default function ProjectSetup() {
             <label className="label">Project Name</label>
             <input className="input" {...register('name', { required: 'Name is required' })} placeholder="e.g. Acme Corp Model" />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+          </div>
+
+          {/* Sector picker — drives the auto-seeded first-pass model so the
+              user gets sensible defaults (growth, margin, capex %) instead of
+              flat zeros. Optgroups keep the long list scannable. */}
+          <div>
+            <label className="label">Sector</label>
+            <select className="input" {...register('sector')}>
+              {sectorGroups.map(g => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.sectors.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {selectedSector && (
+              <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded px-3 py-2 space-y-1">
+                <p>{selectedSector.description}</p>
+                {selectedSector.key_kpis?.length > 0 && (
+                  <p>
+                    <span className="text-gray-400">Key KPIs: </span>
+                    {selectedSector.key_kpis.join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

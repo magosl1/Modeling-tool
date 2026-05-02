@@ -13,6 +13,7 @@ class ProjectCreate(BaseModel):
     projection_years: int = 5
     project_type: str = "single_entity"
     base_currency: Optional[str] = None  # defaults to currency if not set
+    sector: Optional[str] = None         # sector id from sectors catalog
 
 
 class ProjectUpdate(BaseModel):
@@ -23,6 +24,7 @@ class ProjectUpdate(BaseModel):
     projection_years: Optional[int] = None
     project_type: Optional[str] = None
     base_currency: Optional[str] = None
+    sector: Optional[str] = None
 
 
 class ProjectOut(BaseModel):
@@ -35,6 +37,7 @@ class ProjectOut(BaseModel):
     status: str
     project_type: str
     base_currency: str
+    sector: Optional[str] = None
     created_at: Any
     updated_at: Any
 

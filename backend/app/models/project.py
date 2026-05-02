@@ -44,6 +44,9 @@ class Project(Base):
         # Values: "single_entity" | "multi_entity" | "project_finance"
     )
     base_currency: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
+    # Sector id from app.services.sectors.SECTORS. Nullable because pre-existing
+    # projects predate the catalog; new projects always supply one.
+    sector: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
