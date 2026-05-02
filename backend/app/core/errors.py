@@ -68,6 +68,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return _with_rid_header(response, rid)
 
 
+from fastapi.encoders import jsonable_encoder
+
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -78,7 +80,7 @@ async def validation_exception_handler(
             code="validation_error",
             message="Request validation failed",
             request_id=rid,
-            details={"errors": exc.errors()},
+            details={"errors": jsonable_encoder(exc.errors())},
         ),
     )
     return _with_rid_header(response, rid)

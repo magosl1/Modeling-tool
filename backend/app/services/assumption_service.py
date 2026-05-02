@@ -4,7 +4,8 @@ from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
-from app.models.project import AssumptionParam, Entity, HistoricalData, ProjectionAssumption
+from app.models.project import AssumptionParam, HistoricalData, ProjectionAssumption
+from app.models.entity import Entity
 
 
 def seed_default_assumptions(project_id: str, db: Session):

@@ -10,9 +10,10 @@ import {
   XMarkIcon,
   TableCellsIcon,
   ArrowUpTrayIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 
-import { entitiesApi, historicalApi } from '../../services/api'
+import { entitiesApi, historicalApi, assumptionsApi, projectionsApi } from '../../services/api'
 import { ALL_CANONICAL, statementOf, type CanonicalStatement } from '../../lib/canonicalItems'
 import type { Project, AIIngestionResponse } from '../../types/api'
 
@@ -229,13 +230,29 @@ export default function DocumentManager({ projectId, entityId: presetEntityId, o
   })
 
   const saveMutation = useMutation({
-    mutationFn: (data: { parsed: any; years: number[]; entity_id?: string }) => historicalApi.saveJSON(projectId, data),
+    mutationFn: async (data: { parsed: any; years: number[]; entity_id?: string }) => {
+      await historicalApi.saveJSON(projectId, data)
+      await assumptionsApi.autoSeed(projectId)
+      await projectionsApi.run(projectId)
+    },
     onSuccess: () => {
-      toast.success('Consolidated data saved successfully')
+      toast.success('Data saved, inputs generated, and projections run!')
       onComplete?.()
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.detail || 'Failed to save data')
+      toast.error(err.response?.data?.detail || 'Failed to complete the automated process')
+    }
+  })
+
+  const deleteDoc = useMutation({
+    mutationFn: (id: string) => historicalApi.deleteDocument(projectId, id),
+    onSuccess: () => {
+      toast.success('Document deleted')
+      setSelectedDocId(null)
+      qc.invalidateQueries({ queryKey: ['documents', projectId] })
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || 'Failed to delete document')
     }
   })
 
@@ -363,7 +380,7 @@ export default function DocumentManager({ projectId, entityId: presetEntityId, o
             disabled={saveMutation.isPending || !documents.some(d => !d.is_ignored && d.has_analysis)}
             className="btn btn-primary shadow-sm shadow-indigo-200"
           >
-            {saveMutation.isPending ? 'Saving...' : 'Consolidate & Save'}
+            {saveMutation.isPending ? 'Processing...' : 'Save & Run Projections'}
           </button>
         </div>
       </div>
@@ -468,15 +485,28 @@ export default function DocumentManager({ projectId, entityId: presetEntityId, o
                       <DocumentIcon className={`w-5 h-5 shrink-0 ${doc.is_ignored ? 'text-gray-400' : 'text-indigo-500'}`} />
                       <span className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>{doc.filename}</span>
                     </div>
-                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={!doc.is_ignored}
-                        onChange={(e) => toggleDoc.mutate({ id: doc.id, is_ignored: !e.target.checked })}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Use</span>
-                    </label>
+                    <div className="flex items-center gap-3 shrink-0" onClick={e => e.stopPropagation()}>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!doc.is_ignored}
+                          onChange={(e) => toggleDoc.mutate({ id: doc.id, is_ignored: !e.target.checked })}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">Use</span>
+                      </label>
+                      <button 
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this document?')) {
+                            deleteDoc.mutate(doc.id)
+                          }
+                        }}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete document"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <span className="text-gray-500">{(doc.size / 1024 / 1024).toFixed(1)} MB</span>

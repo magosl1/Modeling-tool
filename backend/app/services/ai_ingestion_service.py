@@ -12,10 +12,15 @@ from app.services.llm_client import extract_content, smart_complete
 
 log = get_logger("app.services.ai_ingestion")
 
+from pydantic import Field
+
 class ExtractedFinancialItem(BaseModel):
     standard_metric: str
     original_name: str
-    values: Dict[str, float]
+    values: List[float] = Field(
+        ..., 
+        description="A list of numeric amounts exactly matching the order of the 'periods' array. Use 0.0 if missing."
+    )
 
 class LLMFinancialExtraction(BaseModel):
     currency: Optional[str] = None
@@ -61,6 +66,7 @@ Sigue estrictamente estas reglas:
 
 5. FORMATO DE SALIDA ESTRICTO:
 - Debes devolver ÚNICAMENTE el objeto estructurado válido según el esquema. No incluyas explicaciones, saludos ni formato Markdown adicional.
+- En el campo 'values' de cada ExtractedFinancialItem, las claves (keys) del diccionario DEBEN ser exactamente los periodos detectados (ej. "2021", "2022") y los valores (values) DEBEN ser los importes numéricos correspondientes para ese periodo. ¡No dejes el diccionario 'values' vacío!
 """
 
 def document_to_csv(doc: ExtractedDocument) -> str:

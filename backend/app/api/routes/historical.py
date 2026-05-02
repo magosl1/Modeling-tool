@@ -343,6 +343,29 @@ def toggle_document(
     return {"message": "Toggled", "is_ignored": doc.is_ignored}
 
 
+@router.delete("/{project_id}/documents/{doc_id}")
+def delete_document(
+    project_id: str,
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_project_or_404(project_id, current_user, db)
+    doc = db.query(UploadedFile).filter(UploadedFile.id == doc_id, UploadedFile.project_id == project_id).first()
+    if not doc:
+        raise HTTPException(404, "Document not found")
+        
+    try:
+        if doc.file_path and os.path.exists(doc.file_path):
+            os.remove(doc.file_path)
+    except Exception as e:
+        log.warning("delete_document_file_remove_failed", error=str(e), file_path=doc.file_path)
+
+    db.delete(doc)
+    db.commit()
+    return {"message": "Document deleted successfully"}
+
+
 @router.post("/{project_id}/documents/{doc_id}/analyze")
 async def analyze_document(
     project_id: str,
@@ -401,7 +424,9 @@ async def analyze_document(
             bucket = "CF"
             found_cf = True
             
-        parsed[bucket][item.standard_metric] = item.values
+        # Zip periods with values, truncating if one list is shorter
+        item_vals_dict = dict(zip(extraction.periods, item.values))
+        parsed[bucket][item.standard_metric] = item_vals_dict
         mappings.append({
             "original_name": item.original_name,
             "mapped_to": item.standard_metric,

@@ -142,7 +142,7 @@ def _call_litellm(
                         obj.pop("additionalProperties", None)
                         # Vertex AI also doesn't like 'titles' or 'descriptions' sometimes in nested schemas if strict
                         for k in list(obj.keys()):
-                            if k in ["additionalProperties", "title", "description"]:
+                            if k in ["title", "description"]:
                                 obj.pop(k)
                         for v in obj.values():
                             strip_additional_props(v)

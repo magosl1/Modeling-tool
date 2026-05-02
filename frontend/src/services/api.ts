@@ -108,6 +108,8 @@ export const historicalApi = {
     api.get(`/projects/${projectId}/documents`),
   toggleDocument: (projectId: string, docId: string, is_ignored: boolean): Promise<AxiosResponse<{ message: string; is_ignored: boolean }>> =>
     api.patch(`/projects/${projectId}/documents/${docId}/toggle`, { is_ignored }),
+  deleteDocument: (projectId: string, docId: string): Promise<AxiosResponse<{ message: string }>> =>
+    api.delete(`/projects/${projectId}/documents/${docId}`),
   analyzeDocument: (projectId: string, docId: string): Promise<AxiosResponse<{ message: string; ai_analysis: any; missing_inputs: string[] }>> =>
     api.post(`/projects/${projectId}/documents/${docId}/analyze`),
   saveJSON: (projectId: string, data: { parsed: any; years: number[]; entity_id?: string }): Promise<AxiosResponse<{ message: string }>> =>
