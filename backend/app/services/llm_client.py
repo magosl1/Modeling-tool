@@ -109,6 +109,8 @@ def _call_litellm(
     timeout: float,
     max_tokens: int = 4096,
     temperature: float = 0.0,
+    fallback_model: Optional[str] = None,
+    max_retries: int = 3,
 ) -> dict[str, Any]:
     """Low-level wrapper around ``litellm.completion``.
 
@@ -160,31 +162,66 @@ def _call_litellm(
         else:
             kwargs["response_format"] = response_format
 
-    # Disable safety filters for Gemini to prevent false positives on financial data
-    if model.startswith("gemini/"):
-        kwargs["safety_settings"] = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-
     start = time.perf_counter()
-    try:
-        response = litellm.completion(**kwargs)
-    except litellm.RateLimitError:
-        raise LLMRateLimitError()
-    except litellm.Timeout:
-        raise LLMTimeoutError(timeout)
-    except litellm.APIConnectionError as exc:
-        raise LLMError(f"Cannot reach AI provider: {exc}") from exc
-    except litellm.AuthenticationError:
-        raise LLMError(
-            "API key rejected by the AI provider. "
-            "Check your key in Settings → AI."
-        )
-    except Exception as exc:
-        raise LLMError(f"Unexpected LLM error: {exc}") from exc
+    last_exc: Exception | None = None
+
+    # Try primary model with retries, then fallback model once
+    models_to_try = [model]
+    if fallback_model and fallback_model != model:
+        models_to_try.append(fallback_model)
+
+    for attempt_model in models_to_try:
+        kwargs["model"] = attempt_model
+        # Rebuild safety settings for the actual model being tried
+        if attempt_model.startswith("gemini/"):
+            kwargs["safety_settings"] = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        else:
+            kwargs.pop("safety_settings", None)
+
+        for attempt in range(max_retries):
+            try:
+                response = litellm.completion(**kwargs)
+                last_exc = None
+                break  # success
+            except litellm.RateLimitError:
+                raise LLMRateLimitError()
+            except litellm.Timeout:
+                raise LLMTimeoutError(timeout)
+            except litellm.APIConnectionError as exc:
+                raise LLMError(f"Cannot reach AI provider: {exc}") from exc
+            except litellm.AuthenticationError:
+                raise LLMError(
+                    "API key rejected by the AI provider. "
+                    "Check your key in Settings → AI."
+                )
+            except Exception as exc:
+                err_str = str(exc)
+                is_503 = "503" in err_str or "UNAVAILABLE" in err_str or "ServiceUnavailable" in err_str
+                if is_503 and attempt < max_retries - 1:
+                    wait = 5 * (attempt + 1)  # 5s, 10s, 15s
+                    log.warning(
+                        "llm_503_retry",
+                        model=attempt_model,
+                        attempt=attempt + 1,
+                        wait_s=wait,
+                    )
+                    time.sleep(wait)
+                    last_exc = exc
+                    continue
+                last_exc = exc
+                break  # try fallback
+
+        if last_exc is None:
+            break  # got a response, stop trying models
+        log.warning("llm_model_failed", model=attempt_model, error=str(last_exc))
+
+    if last_exc is not None:
+        raise LLMError(f"Unexpected LLM error: {last_exc}") from last_exc
 
     latency_ms = (time.perf_counter() - start) * 1000
 
@@ -260,9 +297,12 @@ def smart_complete(
     settings = _get_user_settings(user_id, db)
     api_key = decrypt_api_key(settings.api_key_encrypted)
     model = _litellm_model_name(settings.provider, settings.smart_model)
+    # Use cheap model as automatic fallback if smart model is unavailable (e.g. Gemini 503)
+    fallback_model = _litellm_model_name(settings.provider, settings.cheap_model)
 
     return _call_litellm(
         model=model,
+        fallback_model=fallback_model,
         api_key=api_key,
         messages=messages,
         tools=tools,

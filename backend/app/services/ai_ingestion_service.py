@@ -116,7 +116,7 @@ and any row that is entirely text with no numeric data.
 # Helpers
 # ---------------------------------------------------------------------------
 
-def document_to_csv(doc: ExtractedDocument, max_rows: int = 500) -> str:
+def document_to_csv(doc: ExtractedDocument, max_rows: int = 200) -> str:
     """Convert extracted document to CSV string, capping total rows to avoid
     context-window overflow on large Excel files."""
     output = io.StringIO()
