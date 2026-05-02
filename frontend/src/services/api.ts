@@ -187,6 +187,34 @@ export const projectionsApi = {
     api.get(`/projects/${projectId}/projections/export`, { responseType: 'blob' }),
 }
 
+// What-if sliders: ephemeral re-projection + DCF, never persists.
+export interface WhatIfRequest {
+  scenario_id?: string | null
+  revenue_growth_pp_delta?: number
+  cogs_growth_pp_delta?: number
+  opex_growth_pp_delta?: number
+  capex_pct_pp_delta?: number
+  wacc_pct?: number
+  terminal_growth_pct?: number
+}
+export interface WhatIfResponse {
+  metrics: { year: number; revenue: number | null; ebitda: number | null; net_income: number | null }
+  valuation?: {
+    enterprise_value: number
+    net_debt: number
+    equity_value: number
+    value_per_share: number | null
+    terminal_value: number
+  }
+  valuation_error?: string
+  wacc: number
+  terminal_growth: number
+}
+export const whatIfApi = {
+  run: (projectId: string, body: WhatIfRequest): Promise<AxiosResponse<WhatIfResponse>> =>
+    api.post(`/projects/${projectId}/whatif`, body),
+}
+
 // Valuation
 export const valuationApi = {
   get: (projectId: string): Promise<AxiosResponse<ValuationResult>> =>

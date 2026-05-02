@@ -23,6 +23,7 @@ import toast from 'react-hot-toast'
 import { projectionsApi, assumptionsApi } from '../../services/api'
 import type { Project } from '../../types/api'
 import UploadHistoricalAI from './UploadHistoricalAI'
+import WhatIfPanel from '../whatif/WhatIfPanel'
 
 interface Props {
   projectId: string
@@ -247,9 +248,10 @@ export default function ProjectDashboard({ projectId, project }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* Main Chart Area */}
           <div className="lg:col-span-2 space-y-6">
+            <WhatIfPanel projectId={projectId} />
             <div className="card p-6 shadow-sm">
               <div className="flex items-center justify-between mb-8">
                 <div>

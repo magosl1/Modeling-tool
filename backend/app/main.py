@@ -24,6 +24,7 @@ from app.api.routes import (
     simulation,
     templates,
     valuation,
+    whatif,
 )
 from app.core.config import settings
 from app.core.errors import install_exception_handlers, request_id_middleware
@@ -89,6 +90,9 @@ app.include_router(projections.router, prefix=settings.API_V1_STR)
 
 # Valuation
 app.include_router(valuation.router, prefix=settings.API_V1_STR)
+
+# What-If sliders (ephemeral re-projection + DCF, no persistence)
+app.include_router(whatif.router, prefix=settings.API_V1_STR)
 
 # Ratios
 app.include_router(ratios.router, prefix=settings.API_V1_STR)
